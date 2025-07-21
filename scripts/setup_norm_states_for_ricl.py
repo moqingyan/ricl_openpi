@@ -6,7 +6,7 @@ def compute_and_save_simple_norm_stats_for_ricl(num_retrieved):
     norm_stats_basic_file_save_loc = "assets/norm_stats_simple.json"
     max_distance_file_save_loc = "assets/max_distance.json"
 
-    outer_dir = "ricl_droid_preprocessing/collected_demos_training"
+    outer_dir = "preprocessing/collected_demos_training"
     task_dirs = [f"{outer_dir}/{task_dir}" for task_dir in os.listdir(outer_dir) if os.path.isdir(f"{outer_dir}/{task_dir}")]
     demo_dirs = [f"{task_dir}/{demo_dir}" for task_dir in task_dirs for demo_dir in os.listdir(task_dir) if os.path.isdir(f"{task_dir}/{demo_dir}")]
     all_states = []
