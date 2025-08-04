@@ -84,10 +84,22 @@ if __name__ == "__main__":
         assert args.prompts is not None, "If --dir is provided, --prompts must also be provided"
         process(args.dir, args.prompts)
     else:
+        skipped_dirs = []
         for dir in os.listdir(args.dir_of_dirs):
+            # Skip hidden/system files and directories like .git, .gitattributes, .dvc, etc.
+            if dir.startswith('.'):
+                logger.info(f'Skipping hidden file/directory {dir}')
+                skipped_dirs.append(dir)
+                continue
+            # Only process directories, skip files
+            if not os.path.isdir(f"{args.dir_of_dirs}/{dir}"):
+                logger.info(f'Skipping file {dir} (not a directory)')
+                skipped_dirs.append(dir)
+                continue
             temp_prompts = [" ".join(dir.split("_")[1:])]
             logger.info(f'**About to start processing dir {args.dir_of_dirs}/{dir} with prompts {temp_prompts}**')
             process(f"{args.dir_of_dirs}/{dir}", temp_prompts)
+        logger.info(f"Skipped directories: {skipped_dirs}")
 
     print(f'done!')
 

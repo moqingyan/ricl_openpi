@@ -7,13 +7,13 @@ def compute_and_save_simple_norm_stats_for_ricl(num_retrieved):
     max_distance_file_save_loc = "assets/max_distance.json"
 
     outer_dir = "preprocessing/collected_demos_training"
-    task_dirs = [f"{outer_dir}/{task_dir}" for task_dir in os.listdir(outer_dir) if os.path.isdir(f"{outer_dir}/{task_dir}")]
+    task_dirs = [f"{outer_dir}/{task_dir}" for task_dir in os.listdir(outer_dir) if os.path.isdir(f"{outer_dir}/{task_dir}") and not task_dir.startswith('.')]
     demo_dirs = [f"{task_dir}/{demo_dir}" for task_dir in task_dirs for demo_dir in os.listdir(task_dir) if os.path.isdir(f"{task_dir}/{demo_dir}")]
     all_states = []
     all_actions = []
     all_distances = []
     for demo_dir in demo_dirs:
-        demo_data = np.load(f"{demo_dir}/processed_demo.npz")
+        demo_data = np.load(f"{demo_dir}/processed_demo.npz", allow_pickle=True)
         indices_and_dists = np.load(f"{demo_dir}/indices_and_distances.npz")
         all_states.append(demo_data["state"])
         all_actions.append(demo_data["actions"])

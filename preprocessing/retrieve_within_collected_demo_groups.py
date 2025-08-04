@@ -13,7 +13,7 @@ def create_idx_fol_mapping(ds_name):
 	mappings = {temp_name: defaultdict(list) if temp_name == 'groups_to_ep_idxs' else {} for temp_name in mapping_names}
 	
 	count = 100000 # count starts from 100k because droid has less than 100k episodes
-	groups = [f'{ds_name}/{dir}' for dir in os.listdir(ds_name)]
+	groups = [f'{ds_name}/{dir}' for dir in os.listdir(ds_name) if not (dir.startswith('.git') or dir.endswith('.json') or dir == 'README.md')]
 	mappings['groups_to_ep_fols'] = {group: [f'{group}/{fol}' for fol in os.listdir(group)] for group in groups}
 	for group, ep_fols in mappings['groups_to_ep_fols'].items():
 		for ep_fol in ep_fols:
@@ -78,7 +78,7 @@ def retrieval_preprocessing(groups_to_ep_idxs, ep_idxs_to_fol, nb_cores_autofais
 		all_indices = []
 		for ep_count, ep_idx in enumerate(ep_idxs):
 			if embedding_type in EMBED_TYPES:
-				ep_embeddings = np.load(f"{ep_idxs_to_fol[ep_idx]}/processed_demo.npz")[f"{embedding_type}_embeddings"]
+				ep_embeddings = np.load(f"{ep_idxs_to_fol[ep_idx]}/processed_demo.npz", allow_pickle=True)[f"{embedding_type}_embeddings"]
 				all_embeddings.append(ep_embeddings)
 				all_embeddings_map[ep_idx] = ep_embeddings
 			elif embedding_type == "both":

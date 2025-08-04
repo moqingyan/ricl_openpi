@@ -576,7 +576,7 @@ _CONFIGS = [
     #
     TrainConfig(
         name="pi0_fast_droid_ricl___finetune_on_new_task",
-        finetuning_collected_demos_dir="ricl_droid_preprocessing/collected_demos/YYYY-MM-DD_new_task_prompt",
+        finetuning_collected_demos_dir="preprocessing/collected_demos/YYYY-MM-DD_new_task_prompt",
         model=pi0_fast_ricl.Pi0FASTRiclConfig(action_dim=8, action_horizon=15, max_token_len=250, num_retrieved_observations=4, use_action_interpolation=True, lamda=10.0),
         data=RiclDroidDataConfig(repo_id=None, assets=AssetsConfig(asset_id="droid"), base_config=DataConfig(prompt_from_task=False)),
         weight_loader=weight_loaders.CheckpointWeightLoader("pi0_fast_droid_ricl_checkpoint/params"),
