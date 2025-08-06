@@ -78,7 +78,7 @@ def retrieval_preprocessing(groups_to_ep_idxs, ep_idxs_to_fol, nb_cores_autofais
 		all_indices = []
 		for ep_count, ep_idx in enumerate(ep_idxs):
 			if embedding_type in EMBED_TYPES:
-				ep_embeddings = np.load(f"{ep_idxs_to_fol[ep_idx]}/processed_demo.npz", allow_pickle=True)[f"{embedding_type}_embeddings"]
+				ep_embeddings = np.load(f"{ep_idxs_to_fol[ep_idx]}/processed_demo.npz")[f"{embedding_type}_embeddings"]
 				all_embeddings.append(ep_embeddings)
 				all_embeddings_map[ep_idx] = ep_embeddings
 			elif embedding_type == "both":

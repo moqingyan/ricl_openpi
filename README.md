@@ -69,11 +69,15 @@ Retrieval (testing) data in many new tasks: `git clone https://huggingface.co/da
 
 Both of the above can also be found at [this huggingface link](https://huggingface.co/ricl-vla).
 
+git lfs install and pull
+
 ## Preprocessing
 * First cd into the folder
 ```bash
 cd preprocessing
 ```
+
+remove some files to get back raw data
 
 * Process the priming demos for re-training a VLA for in-context learning
 ```bash

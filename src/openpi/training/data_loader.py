@@ -106,7 +106,7 @@ class Pi0FastDroidFinetuneDataset(Dataset):
         indices_files = [] 
         for group_name, ep_fols in collected_demos_infos["groups_to_ep_fols"].items():
             for ep_fol in ep_fols:
-                indices_files.append(f"preprocessing/{ep_fol}/indices_and_distances.npz")
+                indices_files.append(f"ricl_droid_preprocessing/{ep_fol}/indices_and_distances.npz")
         
         # actual loading...
         count_collected_demos = 0
@@ -130,7 +130,7 @@ class Pi0FastDroidFinetuneDataset(Dataset):
         # load all data paths 
         all_ep_idxs = list(np.unique(all_query_indices[:, 0]))
         all_ep_data_paths = {ep_idx: 
-                                    f"preprocessing/{collected_demos_infos['ep_idxs_to_fol'][str(ep_idx)]}/processed_demo.npz"
+                                    f"ricl_droid_preprocessing/{collected_demos_infos['ep_idxs_to_fol'][str(ep_idx)]}/processed_demo.npz"
                             for ep_idx in all_ep_idxs}
         common_prompt = " ".join(collected_demos_infos['ep_idxs_to_fol']['100000'].split("/")[1].split("_")[1:])
         print(f'num episodes: {len(all_ep_idxs)}')
@@ -165,8 +165,8 @@ class RiclDroidDataset(Dataset):
         knn_k = 100
         assert num_retrieved_observations <= knn_k
         embedding_type = "embeddings__wrist_image_left" # retrieval based on embeddings of wrist images
-        indices_and_dists_fol = f"preprocessing/droid_new_broken_up_indices_and_distances/chosenIDscene_id_numepisodes20_embtype{embedding_type}_knnk100"
-        outer_dir = "preprocessing/collected_demos_training" if finetuning_collected_demos_dir is None else finetuning_collected_demos_dir
+        indices_and_dists_fol = f"ricl_droid_preprocessing/droid_new_broken_up_indices_and_distances/chosenIDscene_id_numepisodes20_embtype{embedding_type}_knnk100"
+        outer_dir = "ricl_droid_preprocessing/collected_demos_training" if finetuning_collected_demos_dir is None else finetuning_collected_demos_dir
         collected_demos_infos = {k: json.load(open(f"{outer_dir}/{k}.json")) for k in ['ep_idxs_to_fol', 'fols_to_ep_idxs', 'groups_to_ep_fols', 'groups_to_ep_idxs']}
         # load indices_and_dists
         all_retrieved_indices = []
@@ -220,7 +220,7 @@ class RiclDroidDataset(Dataset):
 
         # load all data paths 
         ds_name = f"droid_new"
-        ds_fol = f"preprocessing/{ds_name}_broken_up"
+        ds_fol = f"ricl_droid_preprocessing/{ds_name}_broken_up"
         all_ep_idxs = list(np.unique(all_retrieved_indices[:, :, 0])) + list(np.unique(all_query_indices[:, 0]))
         all_ep_data_paths = {ep_idx: 
                                     f"{ds_fol}/episode_{ep_idx}.npz" 

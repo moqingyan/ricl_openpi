@@ -13,7 +13,7 @@ def compute_and_save_simple_norm_stats_for_ricl(num_retrieved):
     all_actions = []
     all_distances = []
     for demo_dir in demo_dirs:
-        demo_data = np.load(f"{demo_dir}/processed_demo.npz", allow_pickle=True)
+        demo_data = np.load(f"{demo_dir}/processed_demo.npz")
         indices_and_dists = np.load(f"{demo_dir}/indices_and_distances.npz")
         all_states.append(demo_data["state"])
         all_actions.append(demo_data["actions"])

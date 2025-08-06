@@ -1,5 +1,5 @@
 """
-This is a copy of the utils.py file in the ricl_droid_ directory. 
+This is a copy of the utils.py file in the ricl_droid_preprocessing directory. 
 Also includes init_logging function from the scripts/train_pi0_fast_ricl.py file.
 """
 
