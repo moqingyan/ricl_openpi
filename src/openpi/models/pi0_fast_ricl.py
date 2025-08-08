@@ -84,6 +84,9 @@ class Pi0FASTRiclConfig(_model.BaseModelConfig):
     num_retrieved_observations: int = 5
     use_action_interpolation: bool = False
     lamda: float = 10.0
+    # If true, do not use retrieved actions. Instead, treat the action as latent and
+    # provide the next-timestep images for each retrieved demo. Query remains unchanged.
+    latent_action: bool = False
 
     @property
     @override
@@ -166,45 +169,13 @@ class Pi0FASTRicl(_model.BaseModel):
         img.lazy_init(next(iter(config.fake_obs().images.values())), train=False, rngs=rngs)
         self.PaliGemma = nnx.Dict(llm=llm, img=img)
         self.num_retrieved_observations = config.num_retrieved_observations
-        self.use_action_interpolation = config.use_action_interpolation
+        # If latent_action is enabled, force-disable action interpolation since there
+        # are no retrieved action tokens to interpolate with.
+        self.latent_action = config.latent_action
+        self.use_action_interpolation = False if self.latent_action else config.use_action_interpolation
         self.max_token_len = config.max_token_len # max token len for the "prompt, state, action" prompt
     
-    @at.typecheck
-    def embed_inputs(
-        self, obs: _model.ObservationPrefixPostfix
-    ) -> tuple[at.Float[at.Array, "b s emb"], at.Bool[at.Array, "b s"], at.Int[at.Array, "b s"]]:
-        input_mask = []
-        ar_mask = []
-        token_embeddings = []
-        # embed images
-        for name in obs.images:
-            image_token_embeddings, _ = self.PaliGemma.img(obs.images[name], train=False)
-            # image_token_embeddings = obs.images[name] # Alt: no need to embed as we are feeding the embeddings in directly but this embedding is averaged over patches!
-
-            token_embeddings.append(image_token_embeddings)
-            input_mask.append(
-                einops.repeat(
-                    obs.image_masks[name],
-                    "b -> b s",
-                    s=image_token_embeddings.shape[1],
-                )
-            )
-            # image tokens attend to each other --> AR mask = 0
-            ar_mask.append(0 * input_mask[-1])
-
-        # add tokenized inputs
-        assert obs.tokenized_prompt_prefix is not None, "Tokenized prompt prefix is required"
-        # assert obs.tokenized_prompt_postfix is not None, "Tokenized prompt postfix is required" # postfix can be None at inference time
-        assert obs.tokenized_prompt_mask is not None, "Tokenized prompt mask is required"
-        assert obs.token_ar_mask is not None, "Token auto-regressive mask is required"
-        if obs.tokenized_prompt_postfix is not None:
-            tokenized_inputs_embeddings = self.PaliGemma.llm(jnp.concatenate([obs.tokenized_prompt_prefix, obs.tokenized_prompt_postfix], axis=1), embed_only=True)
-        else:
-            tokenized_inputs_embeddings = self.PaliGemma.llm(obs.tokenized_prompt_prefix, embed_only=True)
-        token_embeddings.append(tokenized_inputs_embeddings)
-        input_mask.append(obs.tokenized_prompt_mask)
-        ar_mask.append(obs.token_ar_mask)
-
+ 
         # return embeddings, input mask, and ar mask
         return (
             jnp.concatenate(token_embeddings, axis=1),
@@ -282,6 +253,8 @@ class Pi0FASTRicl(_model.BaseModel):
         assert num_observations == self.num_retrieved_observations + 1
         list_of_input_token_embeddings = []
         list_of_attn_masks = []
+        retrieval_block_len = None
+        query_block_len = None
         for i in range(num_observations):
             prefix = f"retrieved_{i}_" if i < self.num_retrieved_observations else "query_"
             this_observation = _model.extract_observation_from_ricl_observation(ricl_observation, prefix)
@@ -304,10 +277,30 @@ class Pi0FASTRicl(_model.BaseModel):
                             )
                     print(f'first_targets shape: {first_targets.shape}')
 
+            # Track block lengths to support variable retrieved vs query block sizes
+            if i == 0:
+                retrieval_block_len = this_input_token_embeddings.shape[1]
+            if i == num_observations - 1:
+                query_block_len = this_input_token_embeddings.shape[1]
+
         # combine most lists along the num tokens axis
         input_token_embeddings = jnp.concatenate(list_of_input_token_embeddings, axis=1)
         batch_size, seq_len = input_token_embeddings.shape[0:2]
-        attn_mask = self.combine_attn_masks(list_of_attn_masks, batch_size, seq_len, num_observations)
+        # If latent_action is enabled, retrieved and query blocks can have different
+        # token lengths (due to extra next-timestep images for retrieved only).
+        # Use the inference-time combiner that supports different block sizes.
+        if self.latent_action:
+            assert retrieval_block_len is not None and query_block_len is not None
+            attn_mask = self.combine_attn_masks_inference_time(
+                list_of_attn_masks,
+                batch_size,
+                seq_len,
+                num_observations,
+                retrieval_block_len,
+                query_block_len,
+            )
+        else:
+            attn_mask = self.combine_attn_masks(list_of_attn_masks, batch_size, seq_len, num_observations)
         loss_mask = this_observation.token_loss_mask[:, 1:]
         targets = jax.nn.one_hot(
             jnp.concatenate([this_observation.tokenized_prompt_prefix[:, 1:], this_observation.tokenized_prompt_postfix], axis=1),

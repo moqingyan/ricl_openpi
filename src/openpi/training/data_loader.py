@@ -244,7 +244,9 @@ class RiclDroidDataset(Dataset):
         self.all_retrieved_indices = all_retrieved_indices
         self.all_query_indices = all_query_indices
         self.all_distances = all_distances
-        self.use_action_interpolation = model_config.use_action_interpolation
+        # Support latent actions: when enabled, do not use action interpolation
+        self.latent_action = getattr(model_config, "latent_action", False)
+        self.use_action_interpolation = (model_config.use_action_interpolation and (not self.latent_action))
         self.lamda = model_config.lamda
         self.action_horizon = model_config.action_horizon
 
@@ -263,13 +265,28 @@ class RiclDroidDataset(Dataset):
                 data[f"{prefix}right_image"] = ep_data[ep_idx]["observation__exterior_image_2_left"][step_idx]
                 data[f"{prefix}wrist_image"] = ep_data[ep_idx]["observation__wrist_image_left"][step_idx]
                 data[f"{prefix}state"] = np.concatenate([ep_data[ep_idx]["observation__joint_position"][step_idx], ep_data[ep_idx]["observation__gripper_position"][step_idx]], axis=0)
-                data[f"{prefix}actions"] = get_action_chunk(ep_data[ep_idx]["action_dict__joint_velocity"], ep_data[ep_idx]["action_dict__gripper_position"], step_idx, self.action_horizon)
+                # Add next-timestep images for latent action mode
+                if self.latent_action:
+                    num_steps_ep = ep_data[ep_idx]["observation__exterior_image_1_left"].shape[0]
+                    next_idx = min(step_idx + 1, num_steps_ep - 1)
+                    data[f"{prefix}next_top_image"] = ep_data[ep_idx]["observation__exterior_image_1_left"][next_idx]
+                    data[f"{prefix}next_right_image"] = ep_data[ep_idx]["observation__exterior_image_2_left"][next_idx]
+                    data[f"{prefix}next_wrist_image"] = ep_data[ep_idx]["observation__wrist_image_left"][next_idx]
+                else:
+                    data[f"{prefix}actions"] = get_action_chunk(ep_data[ep_idx]["action_dict__joint_velocity"], ep_data[ep_idx]["action_dict__gripper_position"], step_idx, self.action_horizon)
             else:
                 data[f"{prefix}top_image"] = ep_data[ep_idx]["top_image"][step_idx]
                 data[f"{prefix}right_image"] = ep_data[ep_idx]["right_image"][step_idx]
                 data[f"{prefix}wrist_image"] = ep_data[ep_idx]["wrist_image"][step_idx]
                 data[f"{prefix}state"] = ep_data[ep_idx]["state"][step_idx]
-                data[f"{prefix}actions"] = get_action_chunk(ep_data[ep_idx]["actions"][:, :-1], ep_data[ep_idx]["actions"][:, -1:], step_idx, self.action_horizon)
+                if self.latent_action:
+                    num_steps_ep = ep_data[ep_idx]["top_image"].shape[0]
+                    next_idx = min(step_idx + 1, num_steps_ep - 1)
+                    data[f"{prefix}next_top_image"] = ep_data[ep_idx]["top_image"][next_idx]
+                    data[f"{prefix}next_right_image"] = ep_data[ep_idx]["right_image"][next_idx]
+                    data[f"{prefix}next_wrist_image"] = ep_data[ep_idx]["wrist_image"][next_idx]
+                else:
+                    data[f"{prefix}actions"] = get_action_chunk(ep_data[ep_idx]["actions"][:, :-1], ep_data[ep_idx]["actions"][:, -1:], step_idx, self.action_horizon)
             data[f"{prefix}prompt"] = self.all_ep_prompts[ep_idx]
         
         prefix = "query_"

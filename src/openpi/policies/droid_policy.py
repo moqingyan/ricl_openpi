@@ -69,20 +69,29 @@ class RiclDroidInputs(transforms.DataTransformFn):
                 "base_0_rgb": _parse_image(data[f"{prefix}top_image"]),
                 "base_1_rgb": _parse_image(data[f"{prefix}right_image"]),
                 "left_wrist_0_rgb": _parse_image(data[f"{prefix}wrist_image"]),
+                # Optional next-timestep images (present for retrieved blocks in latent_action mode)
+                **({"base_0_rgb_next": _parse_image(data[f"{prefix}next_top_image"]) } if f"{prefix}next_top_image" in data else {}),
+                **({"base_1_rgb_next": _parse_image(data[f"{prefix}next_right_image"]) } if f"{prefix}next_right_image" in data else {}),
+                **({"left_wrist_0_rgb_next": _parse_image(data[f"{prefix}next_wrist_image"]) } if f"{prefix}next_wrist_image" in data else {}),
             },
             f"{prefix}image_mask": {
                 "base_0_rgb": np.True_,
                 "base_1_rgb": np.True_,
                 "left_wrist_0_rgb": np.True_,
+                # Masks for optional next images
+                **({"base_0_rgb_next": np.True_} if f"{prefix}next_top_image" in data else {}),
+                **({"base_1_rgb_next": np.True_} if f"{prefix}next_right_image" in data else {}),
+                **({"left_wrist_0_rgb_next": np.True_} if f"{prefix}next_wrist_image" in data else {}),
             },
         } for prefix in all_prefix]
 
         # collapse to single dict
         inputs = {k: v for d in inputs_dicts for k, v in d.items()}
 
-        # include retrieved actions and, if present, include query actions
+        # include retrieved actions only if present (non-latent mode). Query actions remain target.
         for prefix in all_prefix[:-1]:
-            inputs[f"{prefix}actions"] = data[f"{prefix}actions"]
+            if f"{prefix}actions" in data:
+                inputs[f"{prefix}actions"] = data[f"{prefix}actions"]
         if "query_actions" in data:
             inputs["query_actions"] = data["query_actions"]
 

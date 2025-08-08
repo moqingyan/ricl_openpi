@@ -110,6 +110,7 @@ class RiclPolicy(BasePolicy):
         self._use_action_interpolation = use_action_interpolation
         self._lamda = lamda
         self._action_horizon = action_horizon
+        self._latent_action = getattr(self._model, "latent_action", False)
         # setup demos for retrieval
         print()
         logger.info(f'loading demos from {demos_dir}...')
@@ -148,10 +149,18 @@ class RiclPolicy(BasePolicy):
         for ct, (ep_idx, step_idx) in enumerate(retrieved_indices[0]):
             for key in ["state", "wrist_image", "top_image", "right_image"]:
                 more_obs[f"retrieved_{ct}_{key}"] = self._demos[ep_idx][key][step_idx]
-            more_obs[f"retrieved_{ct}_actions"] = get_action_chunk_at_inference_time(self._demos[ep_idx]["actions"], step_idx, self._action_horizon)
+            # If latent action is enabled, attach next-timestep images instead of actions
+            if self._latent_action:
+                num_steps_ep = self._demos[ep_idx]["top_image"].shape[0]
+                next_idx = min(step_idx + 1, num_steps_ep - 1)
+                more_obs[f"retrieved_{ct}_next_top_image"] = self._demos[ep_idx]["top_image"][next_idx]
+                more_obs[f"retrieved_{ct}_next_right_image"] = self._demos[ep_idx]["right_image"][next_idx]
+                more_obs[f"retrieved_{ct}_next_wrist_image"] = self._demos[ep_idx]["wrist_image"][next_idx]
+            else:
+                more_obs[f"retrieved_{ct}_actions"] = get_action_chunk_at_inference_time(self._demos[ep_idx]["actions"], step_idx, self._action_horizon)
             more_obs[f"retrieved_{ct}_prompt"] = self._demos[ep_idx]["prompt"].item()
         # Compute exp_lamda_distances if use_action_interpolation
-        if self._use_action_interpolation:
+        if self._use_action_interpolation and (not self._latent_action):
             first_embedding = self._demos[retrieved_indices[0, 0, 0]]["top_image_embeddings"][retrieved_indices[0, 0, 1]]
             distances = [0.0] + [np.linalg.norm(self._demos[ep_idx]["top_image_embeddings"][step_idx:step_idx+1] - first_embedding) for ep_idx, step_idx in retrieved_indices[0, 1:]]
             distances.append(np.linalg.norm(query_embedding - first_embedding))
