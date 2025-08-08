@@ -175,6 +175,41 @@ class Pi0FASTRicl(_model.BaseModel):
         self.use_action_interpolation = False if self.latent_action else config.use_action_interpolation
         self.max_token_len = config.max_token_len # max token len for the "prompt, state, action" prompt
     
+    @at.typecheck
+    def embed_inputs(
+        self, obs: _model.ObservationPrefixPostfix
+    ) -> tuple[at.Float[at.Array, "b s emb"], at.Bool[at.Array, "b s"], at.Int[at.Array, "b s"]]:
+        input_mask = []
+        ar_mask = []
+        token_embeddings = []
+        # embed images
+        for name in obs.images:
+            image_token_embeddings, _ = self.PaliGemma.img(obs.images[name], train=False)
+            # image_token_embeddings = obs.images[name] # Alt: no need to embed as we are feeding the embeddings in directly but this embedding is averaged over patches!
+
+            token_embeddings.append(image_token_embeddings)
+            input_mask.append(
+                einops.repeat(
+                    obs.image_masks[name],
+                    "b -> b s",
+                    s=image_token_embeddings.shape[1],
+                )
+            )
+            # image tokens attend to each other --> AR mask = 0
+            ar_mask.append(0 * input_mask[-1])
+
+        # add tokenized inputs
+        assert obs.tokenized_prompt_prefix is not None, "Tokenized prompt prefix is required"
+        # assert obs.tokenized_prompt_postfix is not None, "Tokenized prompt postfix is required" # postfix can be None at inference time
+        assert obs.tokenized_prompt_mask is not None, "Tokenized prompt mask is required"
+        assert obs.token_ar_mask is not None, "Token auto-regressive mask is required"
+        if obs.tokenized_prompt_postfix is not None:
+            tokenized_inputs_embeddings = self.PaliGemma.llm(jnp.concatenate([obs.tokenized_prompt_prefix, obs.tokenized_prompt_postfix], axis=1), embed_only=True)
+        else:
+            tokenized_inputs_embeddings = self.PaliGemma.llm(obs.tokenized_prompt_prefix, embed_only=True)
+        token_embeddings.append(tokenized_inputs_embeddings)
+        input_mask.append(obs.tokenized_prompt_mask)
+        ar_mask.append(obs.token_ar_mask)
  
         # return embeddings, input mask, and ar mask
         return (
