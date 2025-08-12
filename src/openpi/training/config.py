@@ -552,7 +552,14 @@ _CONFIGS = [
     # 
     TrainConfig(
         name="pi0_fast_droid_ricl",
-        model=pi0_fast_ricl.Pi0FASTRiclConfig(action_dim=8, action_horizon=15, max_token_len=250, num_retrieved_observations=4, use_action_interpolation=True, lamda=10.0),
+        model=pi0_fast_ricl.Pi0FASTRiclConfig(action_dim=8, 
+                                              action_horizon=15, 
+                                              max_token_len=250, 
+                                              num_retrieved_observations=4, 
+                                              use_action_interpolation=True, 
+                                              lamda=10.0,
+                                              latent_action=True,
+                                              ),
         data=RiclDroidDataConfig(
             repo_id=None,
             assets=AssetsConfig(asset_id="droid"),

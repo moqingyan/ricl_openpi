@@ -192,7 +192,7 @@ class FASTTokenizerRicl:
         if dont_pad:
             postfix_padding = []
         else:
-            postfix_padding = [False] * (self._max_len - len(prefix_tokens) - len(prefix_padding) - len(postfix_tokens))            
+            postfix_padding = [0] * (self._max_len - len(prefix_tokens) - len(prefix_padding) - len(postfix_tokens)) # NOTE: use 0 instead of False to fix dtype error when using latent_action. Not sure if this is correct.
 
         # Create output token sequence & masks
         # AR mask is 0 on prefix (bidirectional attention) and 1 on postfix (causal attention to all previous tokens)
