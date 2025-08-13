@@ -1,6 +1,6 @@
 import dataclasses
+import os
 import time
-import logging
 from typing import Tuple, Dict, Any
 
 import numpy as np
@@ -143,18 +143,18 @@ def _compare_actions(a: np.ndarray, b: np.ndarray) -> Dict[str, Any]:
 
 
 def main(args: Args) -> None:
-    logging.basicConfig(level=logging.INFO)
-    logging.info("Building configs...")
+    print("Building configs...")
     cfg_latent, cfg_nonlatent = _build_configs(args)
 
-    logging.info("Sampling a training-style query observation...")
+    print("Sampling a training-style query observation...")
     obs = _make_query_from_training_sample(cfg_latent, args.sample_index)
 
-    logging.info("Loading policies...")
-    policy_latent = _load_policy(cfg_latent, args.ckpt_dir_latent, args.finetuning_collected_demos_dir+args.demos_dir)
-    policy_nonlatent = _load_policy(cfg_nonlatent, args.ckpt_dir_nonlatent, args.finetuning_collected_demos_dir+args.demos_dir)
+    print("Loading policies...")
+    demos_path = os.path.join(args.finetuning_collected_demos_dir, args.demos_dir)
+    policy_latent = _load_policy(cfg_latent, args.ckpt_dir_latent, demos_path)
+    policy_nonlatent = _load_policy(cfg_nonlatent, args.ckpt_dir_nonlatent, demos_path)
 
-    logging.info("Running inference (latent_action=True)...")
+    print("Running inference (latent_action=True)...")
     out_latent, mean_ms_latent, std_ms_latent = _time_inference(
         policy_latent, obs, args.num_warmup, args.num_iters
     )
@@ -162,7 +162,7 @@ def main(args: Args) -> None:
     if actions_latent is None:
         raise RuntimeError("latent_action=True policy did not return 'query_actions'")
 
-    logging.info("Running inference (latent_action=False)...")
+    print("Running inference (latent_action=False)...")
     out_nonlatent, mean_ms_nonlatent, std_ms_nonlatent = _time_inference(
         policy_nonlatent, obs, args.num_warmup, args.num_iters
     )
@@ -170,14 +170,14 @@ def main(args: Args) -> None:
     if actions_nonlatent is None:
         raise RuntimeError("latent_action=False policy did not return 'query_actions'")
 
-    logging.info("Comparing outputs...")
+    print("Comparing outputs...")
     metrics = _compare_actions(actions_latent, actions_nonlatent)
 
     print()
     print("==== Inference timing ====")
-    print(f"latent_action=True : {mean_ms_latent:.4f} s ± {std_ms_latent:.4f}rs over {max(1, args.num_iters)} iters")
+    print(f"latent_action=True : {mean_ms_latent:.4f} s ± {std_ms_latent:.4f} s over {max(1, args.num_iters)} iters")
     print(
-        f"latent_action=False: {mean_ms_nonlatent:.4f} s ± {std_ms_nonlatent:.4f} ls over {max(1, args.num_iters)} iters"
+        f"latent_action=False: {mean_ms_nonlatent:.4f} s ± {std_ms_nonlatent:.4f} s over {max(1, args.num_iters)} iters"
     )
 
     print()
@@ -190,6 +190,6 @@ def main(args: Args) -> None:
 
 
 if __name__ == "__main__":
-    main(Args)
+    main(Args())
 
 
