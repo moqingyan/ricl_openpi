@@ -4,14 +4,14 @@ import logging
 from typing import Tuple, Dict, Any
 
 import numpy as np
-import tyro
 
 from openpi.policies import policy_config as _policy_config
 from openpi.training import config as _config
 from openpi.training import data_loader as _data_loader
 
 
-class Args(tyro.conf.FlagConversionOff):
+@dataclasses.dataclass
+class Args: 
     """Compare inference between latent_action=True and latent_action=False models.
 
     Notes/Assumptions:
@@ -23,17 +23,17 @@ class Args(tyro.conf.FlagConversionOff):
     """
 
     # Checkpoint directories. Fill these in.
-    ckpt_dir_latent: str = ""  # TODO: set path to latent_action=True checkpoint directory
-    ckpt_dir_nonlatent: str = ""  # TODO: set path to latent_action=False checkpoint directory
+    ckpt_dir_latent: str = "checkpoints/pi0_fast_droid_ricl/{ricl_latent_action}/9999"
+    ckpt_dir_nonlatent: str = "pi0_fast_droid_ricl_checkpoint" 
 
     # Directory containing processed demos for retrieval at inference time.
-    demos_dir: str = ""  # TODO: set to folder containing multiple subfolders with processed_demo.npz
+    demos_dir: str = "2025-03-14_move_apple_to_the_right"
 
     # Training config name for RICL (must match your training run).
     config_name: str = "pi0_fast_droid_ricl"
 
     # If you fine-tuned on your own collected demos, set this; otherwise leave None.
-    finetuning_collected_demos_dir: str | None = None
+    finetuning_collected_demos_dir: str = "preprocessing/collected_demos_training/"
 
     # Which sample from the dataset to use to build the query observation.
     sample_index: int = 0
@@ -151,8 +151,8 @@ def main(args: Args) -> None:
     obs = _make_query_from_training_sample(cfg_latent, args.sample_index)
 
     logging.info("Loading policies...")
-    policy_latent = _load_policy(cfg_latent, args.ckpt_dir_latent, args.demos_dir)
-    policy_nonlatent = _load_policy(cfg_nonlatent, args.ckpt_dir_nonlatent, args.demos_dir)
+    policy_latent = _load_policy(cfg_latent, args.ckpt_dir_latent, args.finetuning_collected_demos_dir+args.demos_dir)
+    policy_nonlatent = _load_policy(cfg_nonlatent, args.ckpt_dir_nonlatent, args.finetuning_collected_demos_dir+args.demos_dir)
 
     logging.info("Running inference (latent_action=True)...")
     out_latent, mean_ms_latent, std_ms_latent = _time_inference(
@@ -175,9 +175,9 @@ def main(args: Args) -> None:
 
     print()
     print("==== Inference timing ====")
-    print(f"latent_action=True : {mean_ms_latent:.2f} ms ± {std_ms_latent:.2f} ms over {max(1, args.num_iters)} iters")
+    print(f"latent_action=True : {mean_ms_latent:.4f} s ± {std_ms_latent:.4f}rs over {max(1, args.num_iters)} iters")
     print(
-        f"latent_action=False: {mean_ms_nonlatent:.2f} ms ± {std_ms_nonlatent:.2f} ms over {max(1, args.num_iters)} iters"
+        f"latent_action=False: {mean_ms_nonlatent:.4f} s ± {std_ms_nonlatent:.4f} ls over {max(1, args.num_iters)} iters"
     )
 
     print()
@@ -190,6 +190,6 @@ def main(args: Args) -> None:
 
 
 if __name__ == "__main__":
-    main(tyro.cli(Args))
+    main(Args)
 
 
