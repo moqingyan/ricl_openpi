@@ -1,0 +1,25 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+
+        {
+            "name": "Serve Policy RICL",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/serve_policy_ricl.py",
+            "args": [
+                "policy:checkpoint",
+                "--policy.config=pi0_fast_droid_ricl",
+                "--policy.dir=/media/amishsethi/Elements/ricl/pi0_fast_droid_ricl",
+                "--policy.demos_dir=/media/amishsethi/Elements/ricl/preprocessing/collected_demos_training/2025-03-14_move_apple_to_the_right"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "justMyCode": false,
+            "python": "${workspaceFolder}/.venv/bin/python"
+        },
+    ]
+}
