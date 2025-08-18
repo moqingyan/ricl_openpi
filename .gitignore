@@ -2,6 +2,7 @@
 checkpoints/
 data/
 wandb/
+obs_logs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

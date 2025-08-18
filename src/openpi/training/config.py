@@ -550,15 +550,20 @@ _CONFIGS = [
     # 
     # Creating RICL-Pi0-FAST-DROID configs.
     # 
+
+    use_action_interpolation = False
+    latent_action = False
+    use_action_interpolation = False if latent_action else use_action_interpolation
+
     TrainConfig(
         name="pi0_fast_droid_ricl",
         model=pi0_fast_ricl.Pi0FASTRiclConfig(action_dim=8, 
                                               action_horizon=15, 
                                               max_token_len=250, 
                                               num_retrieved_observations=4, 
-                                              use_action_interpolation=True, 
+                                              use_action_interpolation=use_action_interpolation, 
                                               lamda=10.0,
-                                              latent_action=True,
+                                              latent_action=latent_action,
                                               ),
         data=RiclDroidDataConfig(
             repo_id=None,
@@ -570,7 +575,14 @@ _CONFIGS = [
         weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_fast_droid/params"),
         num_train_steps=10_000,
         batch_size=16,
-        freeze_filter=pi0_fast_ricl.Pi0FASTRiclConfig(action_dim=8, action_horizon=15, max_token_len=250, num_retrieved_observations=4, use_action_interpolation=True, lamda=10.0).get_freeze_filter_with_frozen_img_encoder(),
+        freeze_filter=pi0_fast_ricl.Pi0FASTRiclConfig(action_dim=8, 
+                                                      action_horizon=15, 
+                                                      max_token_len=250, 
+                                                      num_retrieved_observations=4, 
+                                                      use_action_interpolation=use_action_interpolation, 
+                                                      lamda=10.0, 
+                                                      latent_action=latent_action,
+                                                      ).get_freeze_filter_with_frozen_img_encoder(),
         ema_decay=None,
         log_interval=1,
         save_interval=300,

@@ -137,8 +137,11 @@ def _compare_actions(a: np.ndarray, b: np.ndarray) -> Dict[str, Any]:
     diff = a.astype(np.float32) - b.astype(np.float32)
     return {
         "a_values": a,
+        "a_norm": np.linalg.norm(a),
+        "a_sum_abs": float(np.sum(np.abs(a))),
         "b_values": b,
-        "diff_l2_norm": float(np.linalg.norm(diff)),
+        "b_norm": np.linalg.norm(b),
+        "b_sum_abs": float(np.sum(np.abs(b))),
     }
 
 
