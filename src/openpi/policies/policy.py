@@ -152,7 +152,7 @@ class RiclPolicy(BasePolicy):
             # If latent action is enabled, attach next-timestep images instead of actions
             if self._latent_action:
                 num_steps_ep = self._demos[ep_idx]["top_image"].shape[0]
-                next_idx = min(step_idx + 1, num_steps_ep - 1)
+                next_idx = min(step_idx + 5, num_steps_ep - 1)
                 more_obs[f"retrieved_{ct}_next_top_image"] = self._demos[ep_idx]["top_image"][next_idx]
                 more_obs[f"retrieved_{ct}_next_right_image"] = self._demos[ep_idx]["right_image"][next_idx]
                 more_obs[f"retrieved_{ct}_next_wrist_image"] = self._demos[ep_idx]["wrist_image"][next_idx]
