@@ -45,25 +45,26 @@ def process(dir, prompts):
 
         processed_demo = {}
         logger.info(f'processing {demo_folder=}')
-        traj_h5 = h5py.File(f"{demo_folder}/trajectory.h5", 'r')
-
-        skip_bools = traj_h5["observation"]["timestamp"]["skip_action"][:]
-        keep_bools = ~skip_bools
-
-        obs_gripper_pos = traj_h5["observation"]["robot_state"]["gripper_position"][:].reshape(-1, 1)[keep_bools]
-        act_gripper_pos = traj_h5["action"]["gripper_position"][:].reshape(-1, 1)[keep_bools]
-        obs_joint_pos = traj_h5["observation"]["robot_state"]["joint_positions"][keep_bools]
-        act_joint_vel = traj_h5["action"]["joint_velocity"][keep_bools]
-        
-        processed_demo["state"] = np.concatenate([obs_joint_pos, obs_gripper_pos], axis=1)
-        processed_demo["actions"] = np.concatenate([act_joint_vel, act_gripper_pos], axis=1)
-        num_steps = processed_demo["state"].shape[0]
-        assert processed_demo["state"].shape == processed_demo["actions"].shape == (num_steps, 8)
+        num_steps = None
+        if domain != 'human':
+            traj_h5 = h5py.File(f"{demo_folder}/trajectory.h5", 'r')
+            skip_bools = traj_h5["observation"]["timestamp"]["skip_action"][:]
+            keep_bools = ~skip_bools
+            obs_gripper_pos = traj_h5["observation"]["robot_state"]["gripper_position"][:].reshape(-1, 1)[keep_bools]
+            act_gripper_pos = traj_h5["action"]["gripper_position"][:].reshape(-1, 1)[keep_bools]
+            obs_joint_pos = traj_h5["observation"]["robot_state"]["joint_positions"][keep_bools]
+            act_joint_vel = traj_h5["action"]["joint_velocity"][keep_bools]
+            processed_demo["state"] = np.concatenate([obs_joint_pos, obs_gripper_pos], axis=1)
+            processed_demo["actions"] = np.concatenate([act_joint_vel, act_gripper_pos], axis=1)
+            num_steps = processed_demo["state"].shape[0]
+            assert processed_demo["state"].shape == processed_demo["actions"].shape == (num_steps, 8)
 
         for camera_name, key in zip(['hand_camera', 'varied_camera_1', 'varied_camera_2'], ['wrist_image', 'top_image', 'right_image']):
             frames_dir = f"{demo_folder}/recordings/frames/{camera_name}"
             logger.info(f'{frames_dir=}')
             frames = [f"{frames_dir}/{f}" for f in os.listdir(frames_dir)]
+            if num_steps is None:
+                num_steps = len(frames)
             assert len(frames) == num_steps, f'{len(frames)=} {num_steps=}'
             frames = [np.array(Image.open(frame)) for frame in frames]
             frames = np.stack(frames, axis=0)
