@@ -8,6 +8,126 @@ from autofaiss import build_index
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false" # This prevents JAX from preallocating most of the GPU memory.
 EMBED_TYPES = ["top_image", "wrist_image"]
 
+def _load_episode_embeddings(ep_fol, embedding_type):
+	if embedding_type in EMBED_TYPES:
+		return np.load(f"{ep_fol}/processed_demo.npz")[f"{embedding_type}_embeddings"]
+	elif embedding_type == "both":
+		return np.concatenate([np.load(f"{ep_fol}/processed_demo.npz")[f"{item}_embeddings"] for item in EMBED_TYPES], axis=1)
+	else:
+		raise ValueError(f'{embedding_type=} is not in {EMBED_TYPES} and not "both"')
+
+def pair_groups_by_suffix(ds_name, query_suffix, corpus_suffix):
+	groups = [g for g in os.listdir(ds_name) if os.path.isdir(f"{ds_name}/{g}") and not (g.startswith('.git') or g.endswith('.json') or g == 'README.md')]
+	by_base = {}
+	for g in groups:
+		if g.endswith(query_suffix):
+			base = g[:-len(query_suffix)]
+			by_base.setdefault(base, {})['query'] = f"{ds_name}/{g}"
+		elif g.endswith(corpus_suffix):
+			base = g[:-len(corpus_suffix)]
+			by_base.setdefault(base, {})['corpus'] = f"{ds_name}/{g}"
+	return [(base, v['query'], v['corpus']) for base, v in by_base.items() if 'query' in v and 'corpus' in v]
+
+def retrieval_preprocessing_cross_domain(ds_name, mappings, nb_cores_autofaiss, knn_k, embedding_type, query_suffix, corpus_suffix, output_stub):
+	myprint(f'[cross_domain] starting cross-domain retrieval preprocessing for {embedding_type} with query_suffix={query_suffix} corpus_suffix={corpus_suffix}')
+	groups_to_ep_fols = mappings['groups_to_ep_fols']
+	fols_to_ep_idxs = mappings['fols_to_ep_idxs']
+
+	# pair groups by base name
+	pairs = pair_groups_by_suffix(ds_name, query_suffix, corpus_suffix)
+	myprint(f'[cross_domain] found {len(pairs)} group pairs')
+
+	for pair_count, (base, query_group, corpus_group) in enumerate(pairs):
+		myprint(f'[cross_domain] processing base={base} [pair {pair_count}/{len(pairs)}]')
+		# build corpus (human) embeddings index once per base
+		corpus_ep_fols = groups_to_ep_fols.get(corpus_group, [])
+		if len(corpus_ep_fols) == 0:
+			myprint(f'[cross_domain] skipping base={base} because corpus group has no episodes: {corpus_group}')
+			continue
+		corpus_embeddings_list = []
+		corpus_indices_list = []
+		corpus_embeddings_map = {}
+		for ep_fol in corpus_ep_fols:
+			try:
+				ep_embeddings = _load_episode_embeddings(ep_fol, embedding_type)
+			except Exception as e:
+				myprint(f'[cross_domain] skipping episode {ep_fol} due to error loading embeddings: {e}')
+				continue
+			ep_idx = fols_to_ep_idxs[ep_fol]
+			corpus_embeddings_list.append(ep_embeddings)
+			corpus_embeddings_map[ep_idx] = ep_embeddings
+			num_steps = len(ep_embeddings)
+			corpus_indices_list.extend([[ep_idx, stp_idx] for stp_idx in range(num_steps)])
+		if len(corpus_embeddings_list) == 0:
+			myprint(f'[cross_domain] skipping base={base} because no corpus embeddings were loaded')
+			continue
+		corpus_embeddings = np.concatenate(corpus_embeddings_list, axis=0)
+		corpus_indices = np.array(corpus_indices_list)
+		embedding_dim = corpus_embeddings.shape[1]
+		myprint(f'[cross_domain] built corpus with {len(corpus_embeddings)} embeddings, dim={embedding_dim}')
+		knn_index, _ = build_index(embeddings=corpus_embeddings,
+								save_on_disk=False,
+								min_nearest_neighbors_to_retrieve=knn_k + 5,
+								max_index_query_time_ms=10,
+								max_index_memory_usage="25G",
+								current_memory_available="50G",
+								metric_type='l2',
+								nb_cores=nb_cores_autofaiss)
+
+		# query each robot episode
+		query_ep_fols = groups_to_ep_fols.get(query_group, [])
+		for ep_count, ep_fol in enumerate(query_ep_fols):
+			output_path = f"{ep_fol}/{output_stub}"
+			if os.path.exists(output_path):
+				myprint(f'[cross_domain] skipping episode {ep_fol} (already processed) [ep {ep_count}/{len(query_ep_fols)}]')
+				continue
+			try:
+				this_episode_embeddings = _load_episode_embeddings(ep_fol, embedding_type)
+			except Exception as e:
+				myprint(f'[cross_domain] skipping episode {ep_fol} due to error loading query embeddings: {e}')
+				continue
+			this_num_query = len(this_episode_embeddings)
+			robot_ep_idx = fols_to_ep_idxs[ep_fol]
+			myprint(f'[cross_domain] querying for {ep_fol} with {this_num_query} steps [ep {ep_count}/{len(query_ep_fols)}]')
+
+			# search
+			topk_distances, topk_indices = knn_index.search(this_episode_embeddings, 2 * knn_k)
+			try:
+				topk_indices = np.array([[idx for idx in indices if idx != -1][:knn_k] for indices in topk_indices])
+			except:
+				print(f'---------------------------------------------------Too many -1s from topk_indices (cross_domain) ----------------------------------------------------')
+				temp_topk_indices = [[idx for idx in indices if idx != -1][:knn_k] for indices in topk_indices]
+				print(f'after -1s, min len: {min([len(indices) for indices in temp_topk_indices])}, max len {max([len(indices) for indices in temp_topk_indices])}')
+				print(f'-------------------------------------------------------------------------------------------------------------------------------------------')
+				print(f'Leaving some -1s in topk_indices and continuing')
+				topk_indices = np.array([row+[-1 for _ in range(knn_k-len(row))] for row in temp_topk_indices])
+			retrieved_indices = corpus_indices[topk_indices]
+			assert retrieved_indices.shape == (this_num_query, knn_k, 2)
+
+			# compute distances relative to the first neighbor (anchor)
+			myprint(f'[cross_domain] calculating distances ...')
+			all_distances = []
+			for ct in range(this_num_query):
+				row = retrieved_indices[ct]
+				anchor_ep_idx, anchor_step_idx = row[0]
+				anchor_embedding = corpus_embeddings_map[anchor_ep_idx][anchor_step_idx]
+				distances = [0.0] + [np.linalg.norm(corpus_embeddings_map[e_idx][s_idx] - anchor_embedding) for e_idx, s_idx in row[1:]]
+				distances.append(np.linalg.norm(this_episode_embeddings[ct] - anchor_embedding))
+				all_distances.append(distances)
+			all_distances = np.array(all_distances)
+			assert all_distances.shape == (this_num_query, knn_k + 1), f'{all_distances.shape=} {this_num_query=} {knn_k=}'
+
+			# save
+			query_indices = np.array([[robot_ep_idx, stp_idx] for stp_idx in range(this_num_query)], dtype=np.int32)
+			to_save = {
+				'retrieved_indices': retrieved_indices.astype(np.int32),
+				'query_indices': query_indices,
+				'distances': all_distances,
+			}
+			np.savez(output_path, **to_save)
+			myprint(f'[cross_domain] saved retrieval indices for {ep_fol}')
+	myprint(f'[cross_domain] done!')
+
 def create_idx_fol_mapping(ds_name):
 	mapping_names = ['groups_to_ep_fols', 'ep_idxs_to_fol', 'fols_to_ep_idxs', 'groups_to_ep_idxs']
 	mappings = {temp_name: defaultdict(list) if temp_name == 'groups_to_ep_idxs' else {} for temp_name in mapping_names}
@@ -180,6 +300,10 @@ if __name__ == "__main__":
 	parser.add_argument("--knn_k", type=int, default=100, help="number of nearest neighbors to retrieve")
 	parser.add_argument("--embedding_type", type=str, default="top_image", choices=EMBED_TYPES + ["both"])
 	parser.add_argument("--folder_name", type=str, default="collected_demos_training")
+	parser.add_argument("--cross_domain", action="store_true", help="Enable cross-domain retrieval: query from *_robot, retrieve from *_human")
+	parser.add_argument("--query_suffix", type=str, default="_robot")
+	parser.add_argument("--corpus_suffix", type=str, default="_human")
+	parser.add_argument("--output_stub", type=str, default="indices_and_distances_cross_domain.npz")
 	args = parser.parse_args()
 
 	if args.folder_name == "collected_demos_training":
@@ -188,11 +312,21 @@ if __name__ == "__main__":
 		mappings = create_idx_fol_mapping(ds_name)
 
 		# retrieval preprocessing
-		retrieval_preprocessing(groups_to_ep_idxs=mappings['groups_to_ep_idxs'],
-								ep_idxs_to_fol=mappings['ep_idxs_to_fol'],
-								nb_cores_autofaiss=args.nb_cores_autofaiss, 
-								knn_k=args.knn_k,
-								embedding_type=args.embedding_type)
+		if args.cross_domain:
+			retrieval_preprocessing_cross_domain(ds_name=ds_name,
+											  mappings=mappings,
+											  nb_cores_autofaiss=args.nb_cores_autofaiss,
+											  knn_k=args.knn_k,
+											  embedding_type=args.embedding_type,
+											  query_suffix=args.query_suffix,
+											  corpus_suffix=args.corpus_suffix,
+											  output_stub=args.output_stub)
+		else:
+			retrieval_preprocessing(groups_to_ep_idxs=mappings['groups_to_ep_idxs'],
+									ep_idxs_to_fol=mappings['ep_idxs_to_fol'],
+									nb_cores_autofaiss=args.nb_cores_autofaiss, 
+									knn_k=args.knn_k,
+									embedding_type=args.embedding_type)
 		print(f'done!')
 	elif args.folder_name == "collected_demos":
 		all_groups_in_folder = [f"{args.folder_name}/{fol}" for fol in os.listdir(args.folder_name) if os.path.isdir(f"{args.folder_name}/{fol}")]

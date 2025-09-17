@@ -21,6 +21,18 @@ def process(dir, prompts):
     demo_dir = f"{current_dir}/{dir}"
     logger.info(f'absolute path of the {demo_dir=}')
 
+    # infer base_group and domain from the group folder name
+    group_name = os.path.basename(demo_dir)
+    if group_name.endswith('_robot'):
+        domain = 'robot'
+        base_group = group_name[:-len('_robot')]
+    elif group_name.endswith('_human'):
+        domain = 'human'
+        base_group = group_name[:-len('_human')]
+    else:
+        domain = 'unknown'
+        base_group = group_name
+
     # get all the folders (demos) in the demo_dir
     demo_folders = [f"{demo_dir}/{f}" for f in os.listdir(demo_dir) if os.path.isdir(f"{demo_dir}/{f}")]
     logger.info(f'number of demo folders: {len(demo_folders)}')
@@ -68,6 +80,10 @@ def process(dir, prompts):
         prompt = np.random.choice(prompts)
         processed_demo["prompt"] = prompt
 
+        # store metadata useful for cross-domain pairing
+        processed_demo["domain"] = domain
+        processed_demo["base_group"] = base_group
+
         # save the processed episode as a npz file
         np.savez(f"{demo_folder}/processed_demo.npz", **processed_demo)
 
@@ -96,7 +112,14 @@ if __name__ == "__main__":
                 logger.info(f'Skipping file {dir} (not a directory)')
                 skipped_dirs.append(dir)
                 continue
-            temp_prompts = [" ".join(dir.split("_")[1:])]
+            # derive prompt from base_group (strip date prefix and domain suffix)
+            if dir.endswith('_robot'):
+                base_group = dir[:-len('_robot')]
+            elif dir.endswith('_human'):
+                base_group = dir[:-len('_human')]
+            else:
+                base_group = dir
+            temp_prompts = [" ".join(base_group.split("_")[1:])]
             logger.info(f'**About to start processing dir {args.dir_of_dirs}/{dir} with prompts {temp_prompts}**')
             process(f"{args.dir_of_dirs}/{dir}", temp_prompts)
         logger.info(f"Skipped directories: {skipped_dirs}")
