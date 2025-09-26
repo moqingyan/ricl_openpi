@@ -21,5 +21,62 @@
             "justMyCode": false,
             "python": "${workspaceFolder}/.venv/bin/python"
         },
+        {
+            "name": "Process Collected Demos",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/preprocessing/process_collected_demos.py",
+            "args": [
+                "--dir_of_dirs=ricl_human_demo"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/preprocessing",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "justMyCode": false,
+            "python": "${workspaceFolder}/.venv/bin/python"
+        },
+        {
+            "name": "Retrieve Within Collected Demo Groups",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/preprocessing/retrieve_within_collected_demo_groups.py",
+            "args": [
+                "--folder_name=ricl_human_demo",
+                "--cross_domain",
+                "--query_suffix=_robot",
+                "--corpus_suffix=_human",
+                "--output_stub=indices_and_distances.npz"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/preprocessing",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "justMyCode": false,
+            "python": "${workspaceFolder}/.venv/bin/python"
+        },
+        {
+            "name": "Train",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/train_pi0_fast_ricl.py",
+            "args": [
+                "pi0_fast_droid_ricl",
+                "--exp-name=ricl_human_demo",
+                "--overwrite",
+                "--finetuning_collected_demos_dir=preprocessing/ricl_human_demo",
+                "--num_train_steps=10",
+                "--batch_size=1"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "justMyCode": false,
+            "python": "${workspaceFolder}/.venv/bin/python"
+        },
     ]
 }

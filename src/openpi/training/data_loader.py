@@ -181,7 +181,11 @@ class RiclDroidDataset(Dataset):
         # files from the collected demos for training
         for group_name, ep_fols in collected_demos_infos["groups_to_ep_fols"].items():
             for ep_fol in ep_fols:
-                indices_files.append(f"preprocessing/{ep_fol}/indices_and_distances.npz")
+                file_path = f"preprocessing/{ep_fol}/indices_and_distances.npz"
+                # Cross-domain retrieval writes indices only for query (robot) episodes.
+                # Filter out human episodes that don't have retrieval files.
+                if os.path.exists(file_path):
+                    indices_files.append(file_path)
         # actual loading...
         count_droid = 0
         count_collected_demos = 0

@@ -303,10 +303,10 @@ if __name__ == "__main__":
 	parser.add_argument("--cross_domain", action="store_true", help="Enable cross-domain retrieval: query from *_robot, retrieve from *_human")
 	parser.add_argument("--query_suffix", type=str, default="_robot")
 	parser.add_argument("--corpus_suffix", type=str, default="_human")
-	parser.add_argument("--output_stub", type=str, default="indices_and_distances_cross_domain.npz")
+	parser.add_argument("--output_stub", type=str, default="indices_and_distances.npz")
 	args = parser.parse_args()
 
-	if args.folder_name == "collected_demos_training":
+	if args.folder_name == "collected_demos_training" or args.folder_name == "ricl_human_demo":
 		# setup
 		ds_name = args.folder_name
 		mappings = create_idx_fol_mapping(ds_name)

@@ -11,7 +11,7 @@ logging.basicConfig(level=logging.INFO, force=True)
 logger = logging.getLogger(__name__)
 
 
-def process(dir, prompts):
+def process(dir, prompts, skipped_dirs):
     # load model for embedding images
     dinov2 = load_dinov2()
     logger.info(f'loaded dinov2 for image embedding')
@@ -42,51 +42,57 @@ def process(dir, prompts):
         if os.path.exists(f"{demo_folder}/processed_demo.npz"):
             logger.info(f'{demo_folder=} already processed')
             continue
+        try:
+            processed_demo = {}
+            logger.info(f'processing {demo_folder=}')
+            num_steps = None
+            keep_bools = None
+            if domain != 'human':
+                traj_h5 = h5py.File(f"{demo_folder}/trajectory.h5", 'r')
+                skip_bools = traj_h5["observation"]["timestamp"]["skip_action"][:]
+                keep_bools = ~skip_bools
+                obs_gripper_pos = traj_h5["observation"]["robot_state"]["gripper_position"][:].reshape(-1, 1)[keep_bools]
+                act_gripper_pos = traj_h5["action"]["gripper_position"][:].reshape(-1, 1)[keep_bools]
+                obs_joint_pos = traj_h5["observation"]["robot_state"]["joint_positions"][keep_bools]
+                act_joint_vel = traj_h5["action"]["joint_velocity"][keep_bools]
+                processed_demo["state"] = np.concatenate([obs_joint_pos, obs_gripper_pos], axis=1)
+                processed_demo["actions"] = np.concatenate([act_joint_vel, act_gripper_pos], axis=1)
+                num_steps = processed_demo["state"].shape[0]
+                assert processed_demo["state"].shape == processed_demo["actions"].shape == (num_steps, 8)
 
-        processed_demo = {}
-        logger.info(f'processing {demo_folder=}')
-        num_steps = None
-        if domain != 'human':
-            traj_h5 = h5py.File(f"{demo_folder}/trajectory.h5", 'r')
-            skip_bools = traj_h5["observation"]["timestamp"]["skip_action"][:]
-            keep_bools = ~skip_bools
-            obs_gripper_pos = traj_h5["observation"]["robot_state"]["gripper_position"][:].reshape(-1, 1)[keep_bools]
-            act_gripper_pos = traj_h5["action"]["gripper_position"][:].reshape(-1, 1)[keep_bools]
-            obs_joint_pos = traj_h5["observation"]["robot_state"]["joint_positions"][keep_bools]
-            act_joint_vel = traj_h5["action"]["joint_velocity"][keep_bools]
-            processed_demo["state"] = np.concatenate([obs_joint_pos, obs_gripper_pos], axis=1)
-            processed_demo["actions"] = np.concatenate([act_joint_vel, act_gripper_pos], axis=1)
-            num_steps = processed_demo["state"].shape[0]
-            assert processed_demo["state"].shape == processed_demo["actions"].shape == (num_steps, 8)
+            for camera_name, key in zip(['hand_camera', 'varied_camera_1', 'varied_camera_2'], ['wrist_image', 'top_image', 'right_image']):
+                frames_dir = f"{demo_folder}/recordings/frames/{camera_name}"
+                logger.info(f'{frames_dir=}')
+                frames = [f"{frames_dir}/{f}" for f in os.listdir(frames_dir)]
+                if skip_bools is not None:
+                    frames = [frames[i] for i in range(len(frames)) if keep_bools[i]]
+                if num_steps is None:
+                    num_steps = len(frames)
+                assert len(frames) == num_steps, f'{len(frames)=} {num_steps=}'
+                frames = [np.array(Image.open(frame)) for frame in frames]
+                frames = np.stack(frames, axis=0)
+                assert frames.shape == (num_steps, 720, 1280, 3) and frames.dtype == np.uint8, f'{frames.shape=} {frames.dtype=}'
+                frames = resize_with_pad(frames, 224, 224)
+                assert frames.shape == (num_steps, 224, 224, 3) and frames.dtype == np.uint8, f'{frames.shape=} {frames.dtype=}'
+                processed_demo[key] = frames
+                
+                embeddings = embed_with_batches(frames, dinov2)
+                assert embeddings.shape == (num_steps, EMBED_DIM), f'{embeddings.shape=}'
+                processed_demo[f"{key}_embeddings"] = embeddings
 
-        for camera_name, key in zip(['hand_camera', 'varied_camera_1', 'varied_camera_2'], ['wrist_image', 'top_image', 'right_image']):
-            frames_dir = f"{demo_folder}/recordings/frames/{camera_name}"
-            logger.info(f'{frames_dir=}')
-            frames = [f"{frames_dir}/{f}" for f in os.listdir(frames_dir)]
-            if num_steps is None:
-                num_steps = len(frames)
-            assert len(frames) == num_steps, f'{len(frames)=} {num_steps=}'
-            frames = [np.array(Image.open(frame)) for frame in frames]
-            frames = np.stack(frames, axis=0)
-            assert frames.shape == (num_steps, 720, 1280, 3) and frames.dtype == np.uint8, f'{frames.shape=} {frames.dtype=}'
-            frames = resize_with_pad(frames, 224, 224)
-            assert frames.shape == (num_steps, 224, 224, 3) and frames.dtype == np.uint8, f'{frames.shape=} {frames.dtype=}'
-            processed_demo[key] = frames
-            
-            embeddings = embed_with_batches(frames, dinov2)
-            assert embeddings.shape == (num_steps, EMBED_DIM), f'{embeddings.shape=}'
-            processed_demo[f"{key}_embeddings"] = embeddings
+            # randomly sample a prompt from the prompts
+            prompt = np.random.choice(prompts)
+            processed_demo["prompt"] = prompt
 
-        # randomly sample a prompt from the prompts
-        prompt = np.random.choice(prompts)
-        processed_demo["prompt"] = prompt
+            # store metadata useful for cross-domain pairing
+            processed_demo["domain"] = domain
+            processed_demo["base_group"] = base_group
 
-        # store metadata useful for cross-domain pairing
-        processed_demo["domain"] = domain
-        processed_demo["base_group"] = base_group
-
-        # save the processed episode as a npz file
-        np.savez(f"{demo_folder}/processed_demo.npz", **processed_demo)
+            # save the processed episode as a npz file
+            np.savez(f"{demo_folder}/processed_demo.npz", **processed_demo)
+        except Exception as e:
+            logger.error(f'Error processing {demo_folder}: {e}')
+            skipped_dirs.append(demo_folder)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -122,7 +128,7 @@ if __name__ == "__main__":
                 base_group = dir
             temp_prompts = [" ".join(base_group.split("_")[1:])]
             logger.info(f'**About to start processing dir {args.dir_of_dirs}/{dir} with prompts {temp_prompts}**')
-            process(f"{args.dir_of_dirs}/{dir}", temp_prompts)
+            process(f"{args.dir_of_dirs}/{dir}", temp_prompts, skipped_dirs)
         logger.info(f"Skipped directories: {skipped_dirs}")
 
     print(f'done!')
