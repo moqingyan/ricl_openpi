@@ -560,6 +560,7 @@ _CONFIGS = [
                                               use_action_interpolation=False, 
                                               lamda=10.0,
                                               latent_action=True,
+                                              human_demo=True,
                                               ),
         data=RiclDroidDataConfig(
             repo_id=None,
@@ -578,6 +579,7 @@ _CONFIGS = [
                                                       use_action_interpolation=False, 
                                                       lamda=10.0, 
                                                       latent_action=True,
+                                                      human_demo=True,
                                                       ).get_freeze_filter_with_frozen_img_encoder(),
         ema_decay=None,
         log_interval=1,

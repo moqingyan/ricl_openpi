@@ -64,7 +64,8 @@ class RiclDroidInputs(transforms.DataTransformFn):
         # Create inputs dict.
         all_prefix = [f"retrieved_{i}_" for i in range(self.num_retrieved_observations)] + ["query_"]
         inputs_dicts = [{
-            f"{prefix}state": data[f"{prefix}state"],
+            # Retrieved human demos may lack state; default to zeros of action_dim.
+            f"{prefix}state": data.get(f"{prefix}state", np.zeros(self.action_dim, dtype=np.float32)),
             f"{prefix}image": {
                 "base_0_rgb": _parse_image(data[f"{prefix}top_image"]),
                 "base_1_rgb": _parse_image(data[f"{prefix}right_image"]),

@@ -250,6 +250,7 @@ class RiclDroidDataset(Dataset):
         self.all_distances = all_distances
         # Support latent actions: when enabled, do not use action interpolation
         self.latent_action = getattr(model_config, "latent_action", False)
+        self.human_demo = getattr(model_config, "human_demo", False)
         self.use_action_interpolation = (model_config.use_action_interpolation and (not self.latent_action))
         self.lamda = model_config.lamda
         self.action_horizon = model_config.action_horizon
@@ -282,7 +283,9 @@ class RiclDroidDataset(Dataset):
                 data[f"{prefix}top_image"] = ep_data[ep_idx]["top_image"][step_idx]
                 data[f"{prefix}right_image"] = ep_data[ep_idx]["right_image"][step_idx]
                 data[f"{prefix}wrist_image"] = ep_data[ep_idx]["wrist_image"][step_idx]
-                data[f"{prefix}state"] = ep_data[ep_idx]["state"][step_idx]
+                # Ensure a state exists for retrieved items; human demos may not have it.
+                if not self.human_demo:
+                    data[f"{prefix}state"] = ep_data[ep_idx]["state"][step_idx]
                 if self.latent_action:
                     num_steps_ep = ep_data[ep_idx]["top_image"].shape[0]
                     next_idx = min(step_idx + 1, num_steps_ep - 1)

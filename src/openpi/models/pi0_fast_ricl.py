@@ -87,6 +87,8 @@ class Pi0FASTRiclConfig(_model.BaseModelConfig):
     # If true, do not use retrieved actions. Instead, treat the action as latent and
     # provide the next-timestep images for each retrieved demo. Query remains unchanged.
     latent_action: bool = False
+    # If true, human demos are used for retrieval.
+    human_demo: bool = False
 
     @property
     @override
@@ -171,7 +173,8 @@ class Pi0FASTRicl(_model.BaseModel):
         self.num_retrieved_observations = config.num_retrieved_observations
         # If latent_action is enabled, force-disable action interpolation since there
         # are no retrieved action tokens to interpolate with.
-        self.latent_action = config.latent_action
+        self.human_demo = config.human_demo
+        self.latent_action = True if self.human_demo else config.latent_action
         self.use_action_interpolation = False if self.latent_action else config.use_action_interpolation
         self.max_token_len = config.max_token_len # max token len for the "prompt, state, action" prompt
     
