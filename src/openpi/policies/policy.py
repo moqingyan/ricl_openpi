@@ -111,6 +111,7 @@ class RiclPolicy(BasePolicy):
         self._lamda = lamda
         self._action_horizon = action_horizon
         self._latent_action = getattr(self._model, "latent_action", False)
+        self._human_demo = getattr(self._model, "human_demo", False)
         # setup demos for retrieval
         print()
         logger.info(f'loading demos from {demos_dir}...')
@@ -147,8 +148,12 @@ class RiclPolicy(BasePolicy):
         assert retrieved_indices.shape == (1, self._knn_k, 2), f"{retrieved_indices.shape=}"
         # collect retrieved info
         for ct, (ep_idx, step_idx) in enumerate(retrieved_indices[0]):
-            for key in ["state", "wrist_image", "top_image", "right_image"]:
+            # Always add images
+            for key in ["wrist_image", "top_image", "right_image"]:
                 more_obs[f"retrieved_{ct}_{key}"] = self._demos[ep_idx][key][step_idx]
+            # Add state if present; human demos do not have it; otherwise omit and let downstream default to zeros
+            if not self._human_demo:
+                more_obs[f"retrieved_{ct}_state"] = self._demos[ep_idx]["state"][step_idx]
             # If latent action is enabled, attach next-timestep images instead of actions
             if self._latent_action:
                 num_steps_ep = self._demos[ep_idx]["top_image"].shape[0]
