@@ -2,9 +2,13 @@ import os
 from huggingface_hub import HfApi, create_repo, upload_folder
 api = HfApi()
 
-repo_id = "zhengyc02/pi0_fast_droid_ricl_fifth_frame_9999"
-folder = f"{os.path.expanduser('~')}/ricl_openpi/checkpoints/pi0_fast_droid_ricl/{{ricl_latent_action_fifth_frame}}/9999"
-commit_message="pi0_fast_droid_ricl retrain with no action interpolation, time step = 3000."
+demo_type = "human"
+next_frame = "fifth"
+time_step = 4200
+
+repo_id = f"zhengyc02/pi0_ricl_{demo_type}_demo_{next_frame}_frame_{time_step}"
+folder = f"{os.path.expanduser('~')}/ricl_openpi/checkpoints/pi0_fast_droid_ricl/{{ricl_human_demo_2}}/{time_step}"
+commit_message=f"pi0_ricl with {demo_type} demo, using next {next_frame} frame as latent action, time step = {time_step}."
 
 create_repo(repo_id, repo_type="model", private=True, exist_ok=True)
 upload_folder(

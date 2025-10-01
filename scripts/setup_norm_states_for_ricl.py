@@ -2,17 +2,53 @@ import json
 import os
 import numpy as np 
 
-def compute_and_save_simple_norm_stats_for_ricl(num_retrieved):
+def compute_and_save_simple_norm_stats_for_ricl(num_retrieved, outer_dir="preprocessing/collected_demos_training"):
+    """Compute simple normalization stats from robot demos only.
+
+    Assumptions:
+    - Robot demos (used as query) have processed_demo.npz with "state" and "actions",
+      and indices_and_distances.npz.
+    - Human demos (used as retrieved) may lack state/actions and do not have indices_and_distances.npz.
+    - Distances are taken from indices_and_distances.npz for robot demos only.
+    """
     norm_stats_basic_file_save_loc = "assets/norm_stats_simple.json"
     max_distance_file_save_loc = "assets/max_distance.json"
 
-    outer_dir = "preprocessing/collected_demos_training"
-    task_dirs = [f"{outer_dir}/{task_dir}" for task_dir in os.listdir(outer_dir) if os.path.isdir(f"{outer_dir}/{task_dir}") and not task_dir.startswith('.')]
-    demo_dirs = [f"{task_dir}/{demo_dir}" for task_dir in task_dirs for demo_dir in os.listdir(task_dir) if os.path.isdir(f"{task_dir}/{demo_dir}")]
+    task_dirs = [
+        f"{outer_dir}/{task_dir}"
+        for task_dir in os.listdir(outer_dir)
+        if os.path.isdir(f"{outer_dir}/{task_dir}") and not task_dir.startswith('.')
+    ]
+    demo_dirs = [
+        f"{task_dir}/{demo_dir}"
+        for task_dir in task_dirs
+        for demo_dir in os.listdir(task_dir)
+        if os.path.isdir(f"{task_dir}/{demo_dir}")
+    ]
+
+    robot_demo_dirs = []
+    for demo_dir in demo_dirs:
+        processed_path = f"{demo_dir}/processed_demo.npz"
+        indices_path = f"{demo_dir}/indices_and_distances.npz"
+        if os.path.exists(processed_path) and os.path.exists(indices_path):
+            try:
+                demo_data = np.load(processed_path)
+                # Require both state and actions to be present to count as robot demo
+                if "state" in demo_data.files and "actions" in demo_data.files:
+                    robot_demo_dirs.append(demo_dir)
+            except Exception:
+                # Skip corrupted files
+                pass
+
+    if len(robot_demo_dirs) == 0:
+        raise RuntimeError(
+            f"No robot demos found under {outer_dir}. Expected demos to have both processed_demo.npz (with state/actions) and indices_and_distances.npz."
+        )
+
     all_states = []
     all_actions = []
     all_distances = []
-    for demo_dir in demo_dirs:
+    for demo_dir in robot_demo_dirs:
         demo_data = np.load(f"{demo_dir}/processed_demo.npz")
         indices_and_dists = np.load(f"{demo_dir}/indices_and_distances.npz")
         all_states.append(demo_data["state"])
@@ -75,6 +111,10 @@ def convert_simple_norm_stats_to_retrieved_and_query_norm_stats(norm_stats_basic
 
 
 if __name__ == "__main__":
-    num_retrieved = 4 # consequnce is distances
-    output_file_name = compute_and_save_simple_norm_stats_for_ricl(num_retrieved = num_retrieved)
-    convert_simple_norm_stats_to_retrieved_and_query_norm_stats(norm_stats_basic_file = output_file_name, num_retrieved = num_retrieved)
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--outer_dir", type=str, help="Root directory containing processed priming demos.")
+    parser.add_argument("--num_retrieved", type=int, default=4, help="Number of retrieved neighbors to include when computing distance stats.")
+    args = parser.parse_args()
+    output_file_name = compute_and_save_simple_norm_stats_for_ricl(num_retrieved = args.num_retrieved, outer_dir = args.outer_dir)
+    convert_simple_norm_stats_to_retrieved_and_query_norm_stats(norm_stats_basic_file = output_file_name, num_retrieved = args.num_retrieved)

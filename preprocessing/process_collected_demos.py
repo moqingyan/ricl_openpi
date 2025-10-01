@@ -64,7 +64,7 @@ def process(dir, prompts, skipped_dirs):
                 frames_dir = f"{demo_folder}/recordings/frames/{camera_name}"
                 logger.info(f'{frames_dir=}')
                 frames = [f"{frames_dir}/{f}" for f in os.listdir(frames_dir)]
-                if skip_bools is not None:
+                if keep_bools is not None:
                     frames = [frames[i] for i in range(len(frames)) if keep_bools[i]]
                 if num_steps is None:
                     num_steps = len(frames)

@@ -64,18 +64,19 @@
             "program": "${workspaceFolder}/scripts/train_pi0_fast_ricl.py",
             "args": [
                 "pi0_fast_droid_ricl",
-                "--exp-name=ricl_human_demo",
+                "--exp-name=test",
                 // "--exp-name=ricl_original_data_latent_action",
                 "--overwrite",
                 "--finetuning_collected_demos_dir=preprocessing/ricl_human_demo",
                 // "--finetuning_collected_demos_dir=preprocessing/collected_demos_training",
-                "--num_train_steps=10000",
-                "--batch_size=3"
+                "--num_train_steps=10",
+                "--batch_size=1"
             ],
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
             "env": {
-                "PYTHONPATH": "${workspaceFolder}"
+                "PYTHONPATH": "${workspaceFolder}",
+                "CUDA_VISIBLE_DEVICES": "5"
             },
             "justMyCode": false,
             "python": "${workspaceFolder}/.venv/bin/python"
