@@ -148,11 +148,12 @@ class RiclPolicy(BasePolicy):
         assert retrieved_indices.shape == (1, self._knn_k, 2), f"{retrieved_indices.shape=}"
         # collect retrieved info
         for ct, (ep_idx, step_idx) in enumerate(retrieved_indices[0]):
-            # Always add images
-            for key in ["wrist_image", "top_image", "right_image"]:
+            # Always add top and right images
+            for key in ["top_image", "right_image"]:
                 more_obs[f"retrieved_{ct}_{key}"] = self._demos[ep_idx][key][step_idx]
-            # Add state if present; human demos do not have it; otherwise omit and let downstream default to zeros
+            # Human demos do not have states, and wrist images are meaningless
             if not self._human_demo:
+                more_obs[f"retrieved_{ct}_wrist_image"] = self._demos[ep_idx]["wrist_image"][step_idx]
                 more_obs[f"retrieved_{ct}_state"] = self._demos[ep_idx]["state"][step_idx]
             # If latent action is enabled, attach next-timestep images instead of actions
             if self._latent_action:
@@ -160,7 +161,8 @@ class RiclPolicy(BasePolicy):
                 next_idx = min(step_idx + 5, num_steps_ep - 1)
                 more_obs[f"retrieved_{ct}_next_top_image"] = self._demos[ep_idx]["top_image"][next_idx]
                 more_obs[f"retrieved_{ct}_next_right_image"] = self._demos[ep_idx]["right_image"][next_idx]
-                more_obs[f"retrieved_{ct}_next_wrist_image"] = self._demos[ep_idx]["wrist_image"][next_idx]
+                if not self._human_demo:
+                    more_obs[f"retrieved_{ct}_next_wrist_image"] = self._demos[ep_idx]["wrist_image"][next_idx]
             else:
                 more_obs[f"retrieved_{ct}_actions"] = get_action_chunk_at_inference_time(self._demos[ep_idx]["actions"], step_idx, self._action_horizon)
             more_obs[f"retrieved_{ct}_prompt"] = self._demos[ep_idx]["prompt"].item()
@@ -186,11 +188,17 @@ class RiclPolicy(BasePolicy):
         for ct in range(self._knn_k):
             big_top_image.append(obs[f"retrieved_{ct}_top_image"])
             big_right_image.append(obs[f"retrieved_{ct}_right_image"])
-            big_wrist_image.append(obs[f"retrieved_{ct}_wrist_image"])
+            key = f"retrieved_{ct}_wrist_image"
+            if key in obs:
+                big_wrist_image.append(obs[key])
         big_top_image.append(obs["query_top_image"])
         big_right_image.append(obs["query_right_image"])
         big_wrist_image.append(obs["query_wrist_image"])
-        final_image = np.concatenate((np.concatenate(big_top_image, axis=1), np.concatenate(big_right_image, axis=1), np.concatenate(big_wrist_image, axis=1)), axis=0)
+        # If no retrieved wrist images exist, omit the wrist row from the grid
+        rows = [np.concatenate(big_top_image, axis=1), np.concatenate(big_right_image, axis=1)]
+        if len(big_wrist_image) > 0:
+            rows.append(np.concatenate(big_wrist_image, axis=1))
+        final_image = np.concatenate(rows, axis=0)
         Image.fromarray(final_image).save(f"{fol}/{current_datettime}.png")
         # save everything else to json
         with open(f"{fol}/{current_datettime}.json", "w") as f:
