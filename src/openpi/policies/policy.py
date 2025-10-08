@@ -200,16 +200,25 @@ class RiclPolicy(BasePolicy):
         # save all images in one png
         big_top_image = []
         big_right_image = []
-        big_wrist_image = []    
+        big_wrist_image = []
+        # Get wrist image shape from query image for padding if needed
+        wrist_shape = obs["query_wrist_image"].shape if "query_wrist_image" in obs else None
+
         for ct in range(self._knn_k):
             big_top_image.append(obs[f"retrieved_{ct}_top_image"])
             big_right_image.append(obs[f"retrieved_{ct}_right_image"])
             key = f"retrieved_{ct}_wrist_image"
             if key in obs:
                 big_wrist_image.append(obs[key])
+            elif wrist_shape is not None:
+                # Pad with blank (black) image if wrist image is missing but query has wrist
+                big_wrist_image.append(np.zeros(wrist_shape, dtype=obs["query_wrist_image"].dtype))
+
         big_top_image.append(obs["query_top_image"])
         big_right_image.append(obs["query_right_image"])
-        big_wrist_image.append(obs["query_wrist_image"])
+        if "query_wrist_image" in obs:
+            big_wrist_image.append(obs["query_wrist_image"])
+
         # If no retrieved wrist images exist, omit the wrist row from the grid
         rows = [np.concatenate(big_top_image, axis=1), np.concatenate(big_right_image, axis=1)]
         if len(big_wrist_image) > 0:
@@ -246,13 +255,15 @@ class RiclPolicy(BasePolicy):
         print("DEBUG: Image Statistics Comparison")
         print("="*80)
 
-        # Prepare image grids for top, right, and wrist cameras
-        num_cols = self._knn_k + 1  # Retrieved images + query image
-        fig, axes = plt.subplots(3, num_cols, figsize=(4 * num_cols, 12))
-        title = f"Query vs Retrieved Images (Top, Right, Wrist) - Step {step_num}" if step_num is not None else "Query vs Retrieved Images (Top, Right, Wrist)"
-        fig.suptitle(title, fontsize=16)
+        # Hardcoded to only visualize top and right cameras
+        camera_types = ["top_image", "right_image"]
 
-        camera_types = ["top_image", "right_image", "wrist_image"]
+        # Prepare image grids for top and right cameras only
+        num_cols = self._knn_k + 1  # Retrieved images + query image
+        num_rows = 2
+        fig, axes = plt.subplots(num_rows, num_cols, figsize=(4 * num_cols, 8))
+        title = f"Query vs Retrieved Images (Top, Right) - Step {step_num}" if step_num is not None else "Query vs Retrieved Images (Top, Right)"
+        fig.suptitle(title, fontsize=16)
 
         for row_idx, camera_type in enumerate(camera_types):
             # Display retrieved images first
@@ -269,8 +280,8 @@ class RiclPolicy(BasePolicy):
                     print(f"  Min: {retrieved_img.min():.4f}, Max: {retrieved_img.max():.4f}, Mean: {retrieved_img.mean():.4f}")
                     print(f"  Dtype: {retrieved_img.dtype}")
 
-                # # Flip vertically for visualization only
-                # axes[row_idx, ct].imshow(np.flipud(retrieved_img))
+                # Display without flipping
+                axes[row_idx, ct].imshow(retrieved_img)
                 axes[row_idx, ct].set_title(f"Retrieved {ct}\nep{ep_idx}, step{step_idx}\ndist: {distance:.3f}", fontsize=8)
                 axes[row_idx, ct].axis('off')
 
@@ -284,8 +295,8 @@ class RiclPolicy(BasePolicy):
             print(f"  Dtype: {query_img.dtype}")
             print(f"  Has negative values: {(query_img < 0).any()}")
 
-            # # Flip vertically for visualization only
-            # axes[row_idx, -1].imshow(np.flipud(query_img))
+            # Display without flipping
+            axes[row_idx, -1].imshow(query_img)
             axes[row_idx, -1].set_title(f"Query\n{camera_type}", fontsize=8)
             axes[row_idx, -1].axis('off')
             # Add red border to query image for easy identification
@@ -295,7 +306,7 @@ class RiclPolicy(BasePolicy):
                 spine.set_visible(True)
 
         # Add row labels
-        row_labels = ["Top Camera", "Right Camera", "Wrist Camera"]
+        row_labels = ["Top Camera", "Right Camera"]
         for row_idx, label in enumerate(row_labels):
             axes[row_idx, 0].text(-0.1, 0.5, label, transform=axes[row_idx, 0].transAxes,
                                   fontsize=12, fontweight='bold', va='center', rotation=90)
