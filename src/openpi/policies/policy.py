@@ -23,6 +23,9 @@ import logging
 from datetime import datetime
 import json
 from PIL import Image
+import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend
 logger = logging.getLogger()
 BasePolicy: TypeAlias = _base_policy.BasePolicy
 
@@ -116,7 +119,7 @@ class RiclPolicy(BasePolicy):
         print()
         logger.info(f'loading demos from {demos_dir}...')
         self._demos = {demo_idx: np.load(f"{demos_dir}/{folder}/processed_demo.npz") for demo_idx, folder in enumerate(os.listdir(demos_dir)) if os.path.isdir(f"{demos_dir}/{folder}")}
-        self._all_indices = np.array([(ep_idx, step_idx) for ep_idx in list(self._demos.keys()) for step_idx in range(self._demos[ep_idx]["actions"].shape[0])])
+        self._all_indices = np.array([(ep_idx, step_idx) for ep_idx in list(self._demos.keys()) for step_idx in range(self._demos[ep_idx]["wrist_image"].shape[0])])
         _all_embeddings = np.concatenate([self._demos[ep_idx]["top_image_embeddings"] for ep_idx in list(self._demos.keys())])
         assert _all_embeddings.shape == (len(self._all_indices), EMBED_DIM), f"{_all_embeddings.shape=}"
         self._knn_k = self._model.num_retrieved_observations
@@ -136,16 +139,29 @@ class RiclPolicy(BasePolicy):
         self._dinov2 = load_dinov2()
         self._max_dist = json.load(open(f"assets/max_distance.json", 'r'))['distances']['max']
         print(f'self._max_dist: {self._max_dist} [helpful to carefully check this value in case of any issues]')
+        # Initialize step counter for tracking rollout steps
+        self._step_counter = 0
 
-    def retrieve(self, obs: dict) -> dict:
+    def retrieve(self, obs: dict) -> tuple[dict, np.ndarray, np.ndarray]:
         more_obs = {"inference_time": True}
         # embed
+        print("\n" + "="*80)
+        print("DEBUG: Starting Retrieval Process")
+        print("="*80)
         query_embedding = embed(obs["query_top_image"], self._dinov2)
         assert query_embedding.shape == (1, EMBED_DIM), f"{query_embedding.shape=}"
+        print(f"Query embedding shape: {query_embedding.shape}")
+
         # retrieve
         topk_distance, topk_indices = self._knn_index.search(query_embedding, self._knn_k)
         retrieved_indices = self._all_indices[topk_indices]
         assert retrieved_indices.shape == (1, self._knn_k, 2), f"{retrieved_indices.shape=}"
+
+        print(f"\nTop-{self._knn_k} Retrieved Observations:")
+        for ct, (ep_idx, step_idx) in enumerate(retrieved_indices[0]):
+            print(f"  Rank {ct}: Episode {ep_idx}, Step {step_idx}, Distance: {topk_distance[0, ct]:.4f}")
+        print("="*80 + "\n")
+
         # collect retrieved info
         for ct, (ep_idx, step_idx) in enumerate(retrieved_indices[0]):
             # Always add images
@@ -173,7 +189,7 @@ class RiclPolicy(BasePolicy):
             print(f'distances: {distances}')
             more_obs["exp_lamda_distances"] = np.exp(-self._lamda * distances).reshape(-1, 1)
             print(f'exp_lamda_distances: {more_obs["exp_lamda_distances"]}')
-        return {**obs, **more_obs}
+        return {**obs, **more_obs}, retrieved_indices, topk_distance
     
     def save_obs(self, obs: dict, date: str, prefix: str):
         fol = f"obs_logs/{date}/{prefix}"
@@ -213,19 +229,104 @@ class RiclPolicy(BasePolicy):
         with open(f"{fol}/{current_datettime}_token_inputs.json", "w") as f:
             json.dump(every_tokenized_input, f, indent=4)
 
+    def save_comparison_visualization(self, obs: dict, date: str, prefix: str, current_datettime: str, retrieved_indices: np.ndarray, topk_distance: np.ndarray, step_num: int = None):
+        """Create detailed side-by-side visualization comparing query images with retrieved images."""
+        fol = f"obs_logs_final/{date}/{prefix}"
+        os.makedirs(fol, exist_ok=True)
+
+        print("\n" + "="*80)
+        print("DEBUG: Image Statistics Comparison")
+        print("="*80)
+
+        # Prepare image grids for top, right, and wrist cameras
+        num_cols = self._knn_k + 1  # Retrieved images + query image
+        fig, axes = plt.subplots(3, num_cols, figsize=(4 * num_cols, 12))
+        title = f"Query vs Retrieved Images (Top, Right, Wrist) - Step {step_num}" if step_num is not None else "Query vs Retrieved Images (Top, Right, Wrist)"
+        fig.suptitle(title, fontsize=16)
+
+        camera_types = ["top_image", "right_image", "wrist_image"]
+
+        for row_idx, camera_type in enumerate(camera_types):
+            # Display retrieved images first
+            for ct in range(self._knn_k):
+                retrieved_img = obs[f"retrieved_{ct}_{camera_type}"]
+                ep_idx, step_idx = retrieved_indices[0, ct]
+                distance = topk_distance[0, ct]
+
+                # Print stats for first retrieved image
+                if ct == 0:
+                    print(f"\n{camera_type.upper()} - Retrieved {ct}:")
+                    print(f"  Episode: {ep_idx}, Step: {step_idx}, Distance: {distance:.4f}")
+                    print(f"  Shape: {retrieved_img.shape}")
+                    print(f"  Min: {retrieved_img.min():.4f}, Max: {retrieved_img.max():.4f}, Mean: {retrieved_img.mean():.4f}")
+                    print(f"  Dtype: {retrieved_img.dtype}")
+
+                # # Flip vertically for visualization only
+                # axes[row_idx, ct].imshow(np.flipud(retrieved_img))
+                axes[row_idx, ct].set_title(f"Retrieved {ct}\nep{ep_idx}, step{step_idx}\ndist: {distance:.3f}", fontsize=8)
+                axes[row_idx, ct].axis('off')
+
+            # Display query image in the last column
+            query_img = obs[f"query_{camera_type}"]
+
+            # Print query image stats
+            print(f"\n{camera_type.upper()} - Query:")
+            print(f"  Shape: {query_img.shape}")
+            print(f"  Min: {query_img.min():.4f}, Max: {query_img.max():.4f}, Mean: {query_img.mean():.4f}")
+            print(f"  Dtype: {query_img.dtype}")
+            print(f"  Has negative values: {(query_img < 0).any()}")
+
+            # # Flip vertically for visualization only
+            # axes[row_idx, -1].imshow(np.flipud(query_img))
+            axes[row_idx, -1].set_title(f"Query\n{camera_type}", fontsize=8)
+            axes[row_idx, -1].axis('off')
+            # Add red border to query image for easy identification
+            for spine in axes[row_idx, -1].spines.values():
+                spine.set_edgecolor('red')
+                spine.set_linewidth(3)
+                spine.set_visible(True)
+
+        # Add row labels
+        row_labels = ["Top Camera", "Right Camera", "Wrist Camera"]
+        for row_idx, label in enumerate(row_labels):
+            axes[row_idx, 0].text(-0.1, 0.5, label, transform=axes[row_idx, 0].transAxes,
+                                  fontsize=12, fontweight='bold', va='center', rotation=90)
+
+        plt.tight_layout()
+        # Add step number to filename if provided
+        if step_num is not None:
+            comparison_path = f"{fol}/{current_datettime}_comparison_step{step_num:04d}.png"
+        else:
+            comparison_path = f"{fol}/{current_datettime}_comparison.png"
+        plt.savefig(comparison_path, dpi=150, bbox_inches='tight')
+        plt.close()
+
+        print(f"\nVisualization saved: {comparison_path}")
+        print("="*80 + "\n")
+
+        return comparison_path
+
     @override
     def infer(self, obs: dict, debug: bool = True) -> dict:  # type: ignore[misc]
         # Remove the prefix from the obs; get date; below for saving folder only
         prefix = obs.pop("prefix", "temp")
         date = datetime.now().strftime("%m%d")
-        # Retrieval
+        # Retrieval (do this before flipping so embedding works correctly)
         print()
         logger.info(f'retrieving...')
-        obs = self.retrieve(obs)
+        obs, retrieved_indices, topk_distance = self.retrieve(obs)
+
+
         # for debugging, save everything in obs
         if debug:
             logger.info(f'saving obs...')
             current_datettime = self.save_obs(obs, date, prefix)
+            logger.info(f'creating comparison visualization...')
+            self.save_comparison_visualization(obs, date, prefix, current_datettime, retrieved_indices, topk_distance, step_num=self._step_counter)
+
+        # Increment step counter for next iteration
+        self._step_counter += 1
+
         # Make a copy since transformations may modify the inputs in place.
         logger.info(f'transforming...')
         inputs = jax.tree.map(lambda x: x, obs)
@@ -251,6 +352,11 @@ class RiclPolicy(BasePolicy):
         final_outputs = self._output_transform(outputs)
         print(f'final_outputs: {final_outputs}')
         return final_outputs
+
+    def reset_step_counter(self):
+        """Reset the step counter for a new rollout."""
+        self._step_counter = 0
+        logger.info("Step counter reset to 0")
 
     @property
     def metadata(self) -> dict[str, Any]:
