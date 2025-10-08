@@ -3,6 +3,9 @@ checkpoints/
 data/
 wandb/
 obs_logs/
+obs_logs_final/
+assets/
+pi0_fast_droid_ricl_checkpoint
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
