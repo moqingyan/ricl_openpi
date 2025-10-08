@@ -17,8 +17,12 @@ def process(dir, prompts, skipped_dirs):
     logger.info(f'loaded dinov2 for image embedding')
 
     # get current directory and append the dir argument to get demo_dir
-    current_dir = os.path.dirname(os.path.abspath(__file__)) # get current directory
-    demo_dir = f"{current_dir}/{dir}"
+    # Handle both absolute and relative paths
+    if os.path.isabs(dir):
+        demo_dir = dir
+    else:
+        current_dir = os.path.dirname(os.path.abspath(__file__)) # get current directory
+        demo_dir = f"{current_dir}/{dir}"
     logger.info(f'absolute path of the {demo_dir=}')
 
     # infer base_group and domain from the group folder name
@@ -47,18 +51,18 @@ def process(dir, prompts, skipped_dirs):
             logger.info(f'processing {demo_folder=}')
             num_steps = None
             keep_bools = None
-            if domain != 'human':
-                traj_h5 = h5py.File(f"{demo_folder}/trajectory.h5", 'r')
-                skip_bools = traj_h5["observation"]["timestamp"]["skip_action"][:]
-                keep_bools = ~skip_bools
-                obs_gripper_pos = traj_h5["observation"]["robot_state"]["gripper_position"][:].reshape(-1, 1)[keep_bools]
-                act_gripper_pos = traj_h5["action"]["gripper_position"][:].reshape(-1, 1)[keep_bools]
-                obs_joint_pos = traj_h5["observation"]["robot_state"]["joint_positions"][keep_bools]
-                act_joint_vel = traj_h5["action"]["joint_velocity"][keep_bools]
-                processed_demo["state"] = np.concatenate([obs_joint_pos, obs_gripper_pos], axis=1)
-                processed_demo["actions"] = np.concatenate([act_joint_vel, act_gripper_pos], axis=1)
-                num_steps = processed_demo["state"].shape[0]
-                assert processed_demo["state"].shape == processed_demo["actions"].shape == (num_steps, 8)
+            # if domain != 'human':
+            #     traj_h5 = h5py.File(f"{demo_folder}/../trajectory.h5", 'r')
+            #     skip_bools = traj_h5["observation"]["timestamp"]["skip_action"][:]
+            #     keep_bools = ~skip_bools
+            #     obs_gripper_pos = traj_h5["observation"]["robot_state"]["gripper_position"][:].reshape(-1, 1)[keep_bools]
+            #     act_gripper_pos = traj_h5["action"]["gripper_position"][:].reshape(-1, 1)[keep_bools]
+            #     obs_joint_pos = traj_h5["observation"]["robot_state"]["joint_positions"][keep_bools]
+            #     act_joint_vel = traj_h5["action"]["joint_velocity"][keep_bools]
+            #     processed_demo["state"] = np.concatenate([obs_joint_pos, obs_gripper_pos], axis=1)
+            #     processed_demo["actions"] = np.concatenate([act_joint_vel, act_gripper_pos], axis=1)
+            #     num_steps = processed_demo["state"].shape[0]
+            #     assert processed_demo["state"].shape == processed_demo["actions"].shape == (num_steps, 8)
 
             # human demos don't have hand_camera images
             if domain == 'human':
@@ -111,17 +115,25 @@ if __name__ == "__main__":
 
     if args.dir is not None:
         assert args.prompts is not None, "If --dir is provided, --prompts must also be provided"
-        process(args.dir, args.prompts)
+        skipped_dirs = []
+        process(args.dir, args.prompts, skipped_dirs)
     else:
         skipped_dirs = []
-        for dir in os.listdir(args.dir_of_dirs):
+        # Handle both absolute and relative paths for dir_of_dirs
+        if os.path.isabs(args.dir_of_dirs):
+            base_dir = args.dir_of_dirs
+        else:
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            base_dir = f"{current_dir}/{args.dir_of_dirs}"
+        
+        for dir in os.listdir(base_dir):
             # Skip hidden/system files and directories like .git, .gitattributes, .dvc, etc.
             if dir.startswith('.'):
                 logger.info(f'Skipping hidden file/directory {dir}')
                 skipped_dirs.append(dir)
                 continue
             # Only process directories, skip files
-            if not os.path.isdir(f"{args.dir_of_dirs}/{dir}"):
+            if not os.path.isdir(f"{base_dir}/{dir}"):
                 logger.info(f'Skipping file {dir} (not a directory)')
                 skipped_dirs.append(dir)
                 continue
@@ -133,8 +145,8 @@ if __name__ == "__main__":
             else:
                 base_group = dir
             temp_prompts = [" ".join(base_group.split("_")[1:])]
-            logger.info(f'**About to start processing dir {args.dir_of_dirs}/{dir} with prompts {temp_prompts}**')
-            process(f"{args.dir_of_dirs}/{dir}", temp_prompts, skipped_dirs)
+            logger.info(f'**About to start processing dir {base_dir}/{dir} with prompts {temp_prompts}**')
+            process(f"{base_dir}/{dir}", temp_prompts, skipped_dirs)
         logger.info(f"Skipped directories: {skipped_dirs}")
 
     print(f'done!')

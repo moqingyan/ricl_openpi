@@ -1,6 +1,10 @@
 {
     "version": "0.2.0",
     "configurations": [
+        
+    
+        
+
 
         {
             "name": "Serve Policy RICL",
@@ -10,13 +14,16 @@
             "args": [
                 "policy:checkpoint",
                 "--policy.config=pi0_fast_droid_ricl",
-                "--policy.dir=/media/amishsethi/Elements/ricl/pi0_fast_droid_ricl",
-                "--policy.demos_dir=/media/amishsethi/Elements/ricl/preprocessing/collected_demos_training/2025-03-14_move_apple_to_the_right"
+                // "--policy.dir=/media/amishsethi/Elements/ricl/pi0_fast_droid_ricl",
+                // "--policy.dir=/home/amishsethi/.cache/huggingface/hub/models--zhengyc02--pi0_ricl_human_demo_fifth_frame_2400/snapshots/9a2182d883fb72ea96b440b9067f22ba3108c983",
+                "--policy.dir=/home/amishsethi/.cache/huggingface/hub/models--zhengyc02--pi0_ricl_human_demo_fifth_frame_6900/snapshots/27113c638d1e8ef5a17c119cc0b9dd7d18f3a36",
+                // "--policy.demos_dir=/media/amishsethi/Elements/ricl/preprocessing/ricl_human_testing_demo/move_giraff_to_bowl_human",
+                "--policy.demos_dir=/media/amishsethi/Elements/stack_rgb_ordered",
             ],
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
             "env": {
-                "PYTHONPATH": "${workspaceFolder}"
+                "PYTHONPATH": "${workspaceFolder}",
             },
             "justMyCode": false,
             "python": "${workspaceFolder}/.venv/bin/python"

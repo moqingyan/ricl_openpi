@@ -79,7 +79,8 @@ def main(args: Args) -> None:
     server = websocket_policy_server.WebsocketPolicyServer(
         policy=policy,
         host="0.0.0.0",
-        port=args.port,
+        # port=args.port,
+        port=8001,
         metadata=policy_metadata,
     )
     server.serve_forever()
