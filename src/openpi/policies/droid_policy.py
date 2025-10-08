@@ -64,12 +64,13 @@ class RiclDroidInputs(transforms.DataTransformFn):
         # Create inputs dict.
         all_prefix = [f"retrieved_{i}_" for i in range(self.num_retrieved_observations)] + ["query_"]
         inputs_dicts = [{
-            # Retrieved human demos may lack state; default to zeros of action_dim.
-            f"{prefix}state": data.get(f"{prefix}state", np.zeros(self.action_dim, dtype=np.float32)),
+            # Include state only if present (human demos don't have state for retrieved observations)
+            **({f"{prefix}state": data[f"{prefix}state"]} if f"{prefix}state" in data else {}),
             f"{prefix}image": {
                 "base_0_rgb": _parse_image(data[f"{prefix}top_image"]),
                 "base_1_rgb": _parse_image(data[f"{prefix}right_image"]),
-                "left_wrist_0_rgb": _parse_image(data[f"{prefix}wrist_image"]),
+                # Include wrist view only if present
+                **({"left_wrist_0_rgb": _parse_image(data[f"{prefix}wrist_image"])} if f"{prefix}wrist_image" in data else {}),
                 # Optional next-timestep images (present for retrieved blocks in latent_action mode)
                 **({"base_0_rgb_next": _parse_image(data[f"{prefix}next_top_image"]) } if f"{prefix}next_top_image" in data else {}),
                 **({"base_1_rgb_next": _parse_image(data[f"{prefix}next_right_image"]) } if f"{prefix}next_right_image" in data else {}),
@@ -78,7 +79,8 @@ class RiclDroidInputs(transforms.DataTransformFn):
             f"{prefix}image_mask": {
                 "base_0_rgb": np.True_,
                 "base_1_rgb": np.True_,
-                "left_wrist_0_rgb": np.True_,
+                # Include wrist mask only if present
+                **({"left_wrist_0_rgb": np.True_} if f"{prefix}wrist_image" in data else {}),
                 # Masks for optional next images
                 **({"base_0_rgb_next": np.True_} if f"{prefix}next_top_image" in data else {}),
                 **({"base_1_rgb_next": np.True_} if f"{prefix}next_right_image" in data else {}),

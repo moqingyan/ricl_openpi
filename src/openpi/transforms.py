@@ -336,6 +336,9 @@ class TokenizeFASTInputsRicl(DataTransformFn):
             prefix = f"retrieved_{i}_"
             # Actions may be absent when using latent_action; state may be absent when using human demos; use get(...)
             state, actions, prompt = data.get(f"{prefix}state"), data.get(f"{prefix}actions"), data.pop(f"{prefix}prompt")
+            # If state is None (human demos), use zeros for tokenization
+            if state is None:
+                state = np.zeros(self.tokenizer._action_dim, dtype=np.float32)
             prefix_tokens, postfix_tokens, token_mask, ar_mask, loss_mask = self.tokenizer.tokenize(prompt, state, actions, dont_loss=True) # no loss on retrieved prompts
             new_data[f"{prefix}tokenized_prompt_prefix"] = prefix_tokens
             new_data[f"{prefix}tokenized_prompt_postfix"] = postfix_tokens

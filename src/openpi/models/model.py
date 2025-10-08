@@ -142,8 +142,8 @@ class ObservationPrefixPostfix(Generic[ArrayT]):
     images: dict[str, at.Float[ArrayT, "*b h w c"]]
     # Image masks, with same keys as images.
     image_masks: dict[str, at.Bool[ArrayT, "*b"]]
-    # Low-dimensional robot state.
-    state: at.Float[ArrayT, "*b s"]
+    # Low-dimensional robot state (can be None for human demos).
+    state: at.Float[ArrayT, "*b s"] | None
 
     # Tokenized prompt.
     tokenized_prompt_prefix: at.Int[ArrayT, "*b l_prefix"] | None = None
@@ -395,8 +395,9 @@ class RiclObservation(Generic[ArrayT]):
         image_keys = list(data[f"query_image"].keys())
         for prefix in all_prefix:
             for key in image_keys:
-                if data[f"{prefix}image"][key].dtype == np.uint8:
-                    data[f"{prefix}image"][key] = data[f"{prefix}image"][key].astype(np.float32) / 255.0 * 2.0 - 1.0
+                if key in data[f"{prefix}image"]:
+                    if data[f"{prefix}image"][key].dtype == np.uint8:
+                        data[f"{prefix}image"][key] = data[f"{prefix}image"][key].astype(np.float32) / 255.0 * 2.0 - 1.0
         return cls(
             query_images=data.get("query_image"),
             retrieved_0_images=data.get("retrieved_0_image"), 
@@ -656,7 +657,13 @@ def preprocess_observation_prefix_postfix(
     if not set(image_keys).issubset(observation.images):
         raise ValueError(f"images dict missing keys: expected {image_keys}, got {list(observation.images)}")
 
-    batch_shape = observation.state.shape[:-1]
+    # Get batch shape from state if present, otherwise from first image
+    if observation.state is not None:
+        batch_shape = observation.state.shape[:-1]
+    else:
+        # For human demos without state, infer batch shape from images
+        first_image = next(iter(observation.images.values()))
+        batch_shape = first_image.shape[:1]  # (batch,)
 
     out_images = {}
     for key in image_keys:

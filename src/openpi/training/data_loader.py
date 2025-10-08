@@ -199,7 +199,7 @@ class RiclDroidDataset(Dataset):
             all_retrieved_indices.append(retrieved_indices)
             all_query_indices.append(query_indices)
             all_distances.append(distances)
-            if "collected_demos_training" in file_path or "collected_demos" in file_path:
+            if "collected_demos_training" in file_path or "collected_demos" in file_path or "ricl" in file_path:
                 count_collected_demos += num_steps
             else:
                 count_droid += num_steps
@@ -268,30 +268,34 @@ class RiclDroidDataset(Dataset):
             if ep_idx < 100000:
                 data[f"{prefix}top_image"] = ep_data[ep_idx]["observation__exterior_image_1_left"][step_idx]
                 data[f"{prefix}right_image"] = ep_data[ep_idx]["observation__exterior_image_2_left"][step_idx]
-                data[f"{prefix}wrist_image"] = ep_data[ep_idx]["observation__wrist_image_left"][step_idx]
-                data[f"{prefix}state"] = np.concatenate([ep_data[ep_idx]["observation__joint_position"][step_idx], ep_data[ep_idx]["observation__gripper_position"][step_idx]], axis=0)
+                # For human demos, wrist images are meaningless, and state does not exist
+                if not self.human_demo:
+                    data[f"{prefix}wrist_image"] = ep_data[ep_idx]["observation__wrist_image_left"][step_idx]
+                    data[f"{prefix}state"] = np.concatenate([ep_data[ep_idx]["observation__joint_position"][step_idx], ep_data[ep_idx]["observation__gripper_position"][step_idx]], axis=0)
                 # Add next-timestep images for latent action mode
                 if self.latent_action:
                     num_steps_ep = ep_data[ep_idx]["observation__exterior_image_1_left"].shape[0]
                     next_idx = min(step_idx + 1, num_steps_ep - 1)
                     data[f"{prefix}next_top_image"] = ep_data[ep_idx]["observation__exterior_image_1_left"][next_idx]
                     data[f"{prefix}next_right_image"] = ep_data[ep_idx]["observation__exterior_image_2_left"][next_idx]
-                    data[f"{prefix}next_wrist_image"] = ep_data[ep_idx]["observation__wrist_image_left"][next_idx]
+                    if not self.human_demo:
+                        data[f"{prefix}next_wrist_image"] = ep_data[ep_idx]["observation__wrist_image_left"][next_idx]
                 else:
                     data[f"{prefix}actions"] = get_action_chunk(ep_data[ep_idx]["action_dict__joint_velocity"], ep_data[ep_idx]["action_dict__gripper_position"], step_idx, self.action_horizon)
             else:
                 data[f"{prefix}top_image"] = ep_data[ep_idx]["top_image"][step_idx]
                 data[f"{prefix}right_image"] = ep_data[ep_idx]["right_image"][step_idx]
-                data[f"{prefix}wrist_image"] = ep_data[ep_idx]["wrist_image"][step_idx]
-                # Ensure a state exists for retrieved items; human demos may not have it.
+                # For human demos, wrist images are meaningless, and state does not exist
                 if not self.human_demo:
+                    data[f"{prefix}wrist_image"] = ep_data[ep_idx]["wrist_image"][step_idx]
                     data[f"{prefix}state"] = ep_data[ep_idx]["state"][step_idx]
                 if self.latent_action:
                     num_steps_ep = ep_data[ep_idx]["top_image"].shape[0]
                     next_idx = min(step_idx + 1, num_steps_ep - 1)
                     data[f"{prefix}next_top_image"] = ep_data[ep_idx]["top_image"][next_idx]
                     data[f"{prefix}next_right_image"] = ep_data[ep_idx]["right_image"][next_idx]
-                    data[f"{prefix}next_wrist_image"] = ep_data[ep_idx]["wrist_image"][next_idx]
+                    if not self.human_demo:
+                        data[f"{prefix}next_wrist_image"] = ep_data[ep_idx]["wrist_image"][next_idx]
                 else:
                     data[f"{prefix}actions"] = get_action_chunk(ep_data[ep_idx]["actions"][:, :-1], ep_data[ep_idx]["actions"][:, -1:], step_idx, self.action_horizon)
             data[f"{prefix}prompt"] = self.all_ep_prompts[ep_idx]
