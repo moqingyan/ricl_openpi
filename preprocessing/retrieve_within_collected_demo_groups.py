@@ -30,6 +30,14 @@ def pair_groups_by_suffix(ds_name, query_suffix, corpus_suffix):
 
 def retrieval_preprocessing_cross_domain(ds_name, mappings, nb_cores_autofaiss, knn_k, embedding_type, query_suffix, corpus_suffix, output_stub):
 	myprint(f'[cross_domain] starting cross-domain retrieval preprocessing for {embedding_type} with query_suffix={query_suffix} corpus_suffix={corpus_suffix}')
+	
+	# Force top_image for human corpus since they don't have wrist_image
+	actual_embedding_type = embedding_type
+	if corpus_suffix == "_human" and embedding_type in ["wrist_image", "both"]:
+		myprint(f'[cross_domain] WARNING: Human corpus does not have wrist_image embeddings.')
+		myprint(f'[cross_domain] Overriding embedding_type from "{embedding_type}" to "top_image" for cross-domain retrieval.')
+		actual_embedding_type = "top_image"
+	
 	groups_to_ep_fols = mappings['groups_to_ep_fols']
 	fols_to_ep_idxs = mappings['fols_to_ep_idxs']
 
@@ -49,7 +57,7 @@ def retrieval_preprocessing_cross_domain(ds_name, mappings, nb_cores_autofaiss, 
 		corpus_embeddings_map = {}
 		for ep_fol in corpus_ep_fols:
 			try:
-				ep_embeddings = _load_episode_embeddings(ep_fol, embedding_type)
+				ep_embeddings = _load_episode_embeddings(ep_fol, actual_embedding_type)
 			except Exception as e:
 				myprint(f'[cross_domain] skipping episode {ep_fol} due to error loading embeddings: {e}')
 				continue
@@ -82,7 +90,7 @@ def retrieval_preprocessing_cross_domain(ds_name, mappings, nb_cores_autofaiss, 
 				myprint(f'[cross_domain] skipping episode {ep_fol} (already processed) [ep {ep_count}/{len(query_ep_fols)}]')
 				continue
 			try:
-				this_episode_embeddings = _load_episode_embeddings(ep_fol, embedding_type)
+				this_episode_embeddings = _load_episode_embeddings(ep_fol, actual_embedding_type)
 			except Exception as e:
 				myprint(f'[cross_domain] skipping episode {ep_fol} due to error loading query embeddings: {e}')
 				continue

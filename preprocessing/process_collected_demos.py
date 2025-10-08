@@ -60,7 +60,13 @@ def process(dir, prompts, skipped_dirs):
                 num_steps = processed_demo["state"].shape[0]
                 assert processed_demo["state"].shape == processed_demo["actions"].shape == (num_steps, 8)
 
-            for camera_name, key in zip(['hand_camera', 'varied_camera_1', 'varied_camera_2'], ['wrist_image', 'top_image', 'right_image']):
+            # human demos don't have hand_camera images
+            if domain == 'human':
+                cameras = [('varied_camera_1', 'top_image'), ('varied_camera_2', 'right_image')]
+            else:
+                cameras = [('hand_camera', 'wrist_image'), ('varied_camera_1', 'top_image'), ('varied_camera_2', 'right_image')]
+            
+            for camera_name, key in cameras:
                 frames_dir = f"{demo_folder}/recordings/frames/{camera_name}"
                 logger.info(f'{frames_dir=}')
                 frames = [f"{frames_dir}/{f}" for f in os.listdir(frames_dir)]

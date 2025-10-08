@@ -64,13 +64,14 @@
             "program": "${workspaceFolder}/scripts/train_pi0_fast_ricl.py",
             "args": [
                 "pi0_fast_droid_ricl",
-                "--exp-name=test",
+                "--exp-name=ricl_human_demo_flipped_wrist_back",
                 // "--exp-name=ricl_original_data_latent_action",
-                "--overwrite",
+                // "--overwrite",
+                "--resume",
                 "--finetuning_collected_demos_dir=preprocessing/ricl_human_demo",
                 // "--finetuning_collected_demos_dir=preprocessing/collected_demos_training",
-                "--num_train_steps=10",
-                "--batch_size=1"
+                "--num_train_steps=2000",
+                "--batch_size=4"
             ],
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
